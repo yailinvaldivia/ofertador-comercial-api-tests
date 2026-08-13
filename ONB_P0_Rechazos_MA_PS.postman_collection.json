@@ -1,0 +1,2802 @@
+{
+  "info": {
+    "_postman_id": "d1c39a78-bbae-4d34-ba69-966d73797750",
+    "name": "ONB - Prefiltro P0 | MA + PS - Eligibility Evaluations",
+    "description": "Suite automatizada P0 – Rechazos de Prefiltro | Eligibility Evaluations\n\nEsta suite valida las reglas de negocio críticas asociadas a los rechazos de Prefiltro del proceso de Eligibility Evaluations para los modelos Mercado Abierto (MA – Subcanal 8) y Plan Sueldo (PS – Subcanal 9).\n\nLa cobertura se encuentra organizada por Decision Model, permitiendo identificar claramente la regla de negocio evaluada y sus diferentes escenarios:\n\n- R01 – Edad inferior a la permitida: validación de restricciones de edad para clientes y no clientes.\n- R02 – Límites de cuentas de ahorro: validación de las condiciones de rechazo asociadas a límites de cuentas en pesos y USD.\n- R03 – Límite CBU/CVU: validación del rechazo cuando la cantidad de cuentas supera el límite permitido.\n\nPara cada escenario se valida la respuesta técnica del servicio, el contrato mínimo esperado, la decisión de negocio obtenida, el motivo de rechazo correspondiente, la ausencia de ofertas cuando aplica el rechazo, la consistencia de los datos de entrada/salida y el contexto de la transacción.\n\nLos escenarios utilizan datos dinámicos dentro de las particiones de equivalencia definidas, permitiendo ampliar la variabilidad de los datos evaluados manteniendo el comportamiento esperado de cada regla.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "_exporter_id": "57020614",
+    "_collection_link": "https://yailinvaldivia-1435013.postman.co/workspace/Ofertador-MA---Casu%25C3%25ADstica~6718157b-5df1-4dcf-b58e-9e7087af60b2/collection/57020614-d1c39a78-bbae-4d34-ba69-966d73797750?action=share&source=collection_link&creator=57020614"
+  },
+  "item": [
+    {
+      "name": "00 - Auth",
+      "item": [
+        {
+          "name": "00 - oauth-access (obtener token)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('OAuth status is 200', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "const responseJson = pm.response.json();",
+                  "",
+                  "pm.test('access_token exists', function () {",
+                  "    pm.expect(responseJson.access_token).to.be.a('string').and.not.empty;",
+                  "});",
+                  "",
+                  "pm.collectionVariables.set('AccessToken', responseJson.access_token);",
+                  "console.log('AccessToken actualizado');"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "basic",
+              "basic": [
+                {
+                  "key": "password",
+                  "value": "{{Password}}",
+                  "type": "string"
+                },
+                {
+                  "key": "username",
+                  "value": "{{Username}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/x-www-form-urlencoded"
+              },
+              {
+                "key": "Host",
+                "value": "{{headerHost}}",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "urlencoded",
+              "urlencoded": [
+                {
+                  "key": "scope",
+                  "value": "openid",
+                  "type": "text"
+                },
+                {
+                  "key": "grant_type",
+                  "value": "client_credentials",
+                  "type": "text"
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{baseURL}}/v1/oauth/access",
+              "host": [
+                "{{baseURL}}"
+              ],
+              "path": [
+                "v1",
+                "oauth",
+                "access"
+              ]
+            },
+            "description": "Obtiene AccessToken y lo guarda en variable de colección. Ejecutar primero o incluir al inicio del Collection Runner."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "P0 - Rechazos Prefiltro por Decision Model",
+      "description": "Suite crítica inicial organizada por decisiones de negocio.\nLa implementación conserva la misma autenticación, variables, requests y mecánica de ejecución Newman de la colección base que ya fue validada exitosamente.\n\nCapas de validación incluidas:\n1. Técnica: HTTP y Content-Type.\n2. Contrato mínimo observado del response.\n3. Invariantes comunes de rechazo.\n4. Regla específica por Decision Model.\n5. Consistencia de data dinámica y particiones de equivalencia.\n6. Trazabilidad MA/PS mediante canal/subcanal.\n\nNo incluye todavía Boundary Suite ni validación directa de Eligibility Assessment.",
+      "item": [
+        {
+          "name": "R01 - Edad inferior a la permitida",
+          "description": "Decision Model R01 | Prioridad P0\nRegla: una persona dentro de la partición de edad <=12 debe ser rechazada por Prefiltro.\nExpected: REJECTED, commercial-offers vacío, rejection code 1.\nCobertura actual: cliente/no cliente, MA/PS.\nLos valores frontera exactos 12/13 quedan reservados para una Boundary Suite.",
+          "item": [
+            {
+              "name": "MA - Subcanal 8",
+              "description": "MA | request-channel 20 | request-sub-channel 8. La carpeta hereda data dinámica y assertions comunes estables para Newman.",
+              "item": [
+                {
+                  "name": "MA | Edad <=12 - No cliente",
+                  "event": [
+                    {
+                      "listen": "test",
+                      "script": {
+                        "type": "text/javascript",
+                        "exec": [
+                          "// ================================================================",
+                          "// ASSERTIONS ESPECÍFICAS - R01",
+                          "// ================================================================",
+                          "",
+                          "if (pm.response.code === 200) {",
+                          "    const json = pm.response.json();",
+                          "    const requestBody = JSON.parse(pm.request.body.raw || '{}');",
+                          "",
+                          "    pm.test('Expected rejection code is 1', function () {",
+                          "        const reasons = json['rejection-reasons'] || [];",
+                          "        pm.expect(String(reasons[0]?.code)).to.eql('1');",
+                          "    });",
+                          "",
+                          "    pm.test('Expected rejection description is correct', function () {",
+                          "        const reasons = json['rejection-reasons'] || [];",
+                          "        pm.expect(reasons[0]?.description).to.eql('Edad inferior a la permitida');",
+                          "    });",
+                          "}"
+                        ]
+                      }
+                    }
+                  ],
+                  "request": {
+                    "auth": {
+                      "type": "bearer",
+                      "bearer": [
+                        {
+                          "key": "token",
+                          "value": "{{AccessToken}}",
+                          "type": "string"
+                        }
+                      ]
+                    },
+                    "method": "POST",
+                    "header": [
+                      {
+                        "key": "Accept",
+                        "value": "application/json",
+                        "type": "text"
+                      },
+                      {
+                        "key": "Content-Type",
+                        "value": "application/json",
+                        "type": "text"
+                      },
+                      {
+                        "key": "x-request-id",
+                        "value": "{{$randomUUID}}",
+                        "type": "text"
+                      },
+                      {
+                        "key": "x-customer-id",
+                        "value": "{{xCustomerId}}",
+                        "type": "text"
+                      },
+                      {
+                        "key": "Host",
+                        "value": "{{headerHost}}",
+                        "type": "text"
+                      }
+                    ],
+                    "body": {
+                      "mode": "raw",
+                      "raw": "{\n    \"request-channel\": 20,\n    \"request-sub-channel\": 8,\n    \"utm-tracking\": {\n        \"source\": \"web\",\n        \"medium\": \"landing\",\n        \"campaign\": \"youth\",\n        \"content\": \"placeholder\"\n    },\n    \"references\": null,\n    \"party\": {\n        \"taxpayer-number\": \"20062484838\",\n        \"birth-date\": \"2020-07-07\",\n        \"is-customer\": false,\n        \"is-digital-customer\": false,\n        \"bank-segment-code\": null,\n        \"segment-code\": null,\n        \"sub-segment-code\": null,\n        \"total-account\": 5,\n        \"process-type\": \"ENLINEA\",\n        \"product\": {\n            \"category\": null,\n            \"details\": []\n        }\n    }\n}",
+                      "options": {
+                        "raw": {
+                          "language": "json"
+                        }
+                      }
+                    },
+                    "url": {
+                      "raw": "{{baseURL}}/v1/fp/offer-rules/eligibility-evaluations",
+                      "host": [
+                        "{{baseURL}}"
+                      ],
+                      "path": [
+                        "v1",
+                        "fp",
+                        "offer-rules",
+                        "eligibility-evaluations"
+                      ]
+                    },
+                    "description": "Decision Model: R01 | Prioridad: P0 | Canal: MA\nCANAL 20 | SUBCANAL 8 | ES CLIENTE=NO | EDAD<=12 | PREFILTRO APRUEBA=NO | Motivo esperado: Edad inferior a la permitida (code 1)"
+                  },
+                  "response": []
+                },
+                {
+                  "name": "MA | Edad <=12 - Cliente",
+                  "event": [
+                    {
+                      "listen": "test",
+                      "script": {
+                        "type": "text/javascript",
+                        "exec": [
+                          "// ================================================================",
+                          "// ASSERTIONS ESPECÍFICAS - R01",
+                          "// ================================================================",
+                          "",
+                          "if (pm.response.code === 200) {",
+                          "    const json = pm.response.json();",
+                          "    const requestBody = JSON.parse(pm.request.body.raw || '{}');",
+                          "",
+                          "    pm.test('Expected rejection code is 1', function () {",
+                          "        const reasons = json['rejection-reasons'] || [];",
+                          "        pm.expect(String(reasons[0]?.code)).to.eql('1');",
+                          "    });",
+                          "",
+                          "    pm.test('Expected rejection description is correct', function () {",
+                          "        const reasons = json['rejection-reasons'] || [];",
+                          "        pm.expect(reasons[0]?.description).to.eql('Edad inferior a la permitida');",
+                          "    });",
+                          "}"
+                        ]
+                      }
+                    }
+                  ],
+                  "request": {
+                    "auth": {
+                      "type": "bearer",
+                      "bearer": [
+                        {
+                          "key": "token",
+                          "value": "{{AccessToken}}",
+                          "type": "string"
+                        }
+                      ]
+                    },
+                    "method": "POST",
+                    "header": [
+                      {
+                        "key": "Accept",
+                        "value": "application/json",
+                        "type": "text"
+                      },
+                      {
+                        "key": "Content-Type",
+                        "value": "application/json",
+                        "type": "text"
+                      },
+                      {
+                        "key": "x-request-id",
+                        "value": "{{$randomUUID}}",
+                        "type": "text"
+                      },
+                      {
+                        "key": "x-customer-id",
+                        "value": "{{xCustomerId}}",
+                        "type": "text"
+                      },
+                      {
+                        "key": "Host",
+                        "value": "{{headerHost}}",
+                        "type": "text"
+                      }
+                    ],
+                    "body": {
+                      "mode": "raw",
+                      "raw": "{\n    \"request-channel\": 20,\n    \"request-sub-channel\": 8,\n    \"utm-tracking\": {\n        \"source\": \"web\",\n        \"medium\": \"landing\",\n        \"campaign\": \"youth\",\n        \"content\": \"placeholder\"\n    },\n    \"references\": null,\n    \"party\": {\n        \"taxpayer-number\": \"20113669714\",\n        \"birth-date\": \"2020-07-07\",\n        \"is-customer\": true,\n        \"is-digital-customer\": true,\n        \"bank-segment-code\": \"01\",\n        \"segment-code\": \"01\",\n        \"sub-segment-code\": \"02\",\n        \"total-account\": 5,\n        \"process-type\": \"ENLINEA\",\n        \"product\": {\n            \"category\": \"02\",\n            \"details\": [\n                {\n                    \"id\": \"4\",\n                    \"description\": \"CUENTA DE AHORROS\",\n                    \"currency-id\": 2,\n                    \"account\": {\n                        \"holder-type\": \"T\",\n                        \"category\": \"SA\"\n                    },\n                    \"status-code\": \"A\",\n                    \"product-bundle-id\": 0\n                },\n                {\n                    \"id\": \"4\",\n                    \"description\": \"CUENTA DE AHORROS\",\n                    \"currency-id\": 2,\n                    \"account\": {\n                        \"holder-type\": \"T\",\n                        \"category\": \"SA\"\n                    },\n                    \"status-code\": \"I\",\n                    \"product-bundle-id\": 0\n                },\n                {\n                    \"id\": \"4\",\n                    \"description\": \"CUENTA DE AHORROS\",\n                    \"currency-id\": 80,\n                    \"account\": {\n                        \"holder-type\": \"T\",\n                        \"category\": \"KME\"\n                    },\n                    \"status-code\": \"A\",\n                    \"product-bundle-id\": 0\n                },\n                {\n                    \"id\": \"16\",\n                    \"description\": \"ATM - ADMINISTRACION TARJETAS DE DEBITO\",\n                    \"currency-id\": null,\n                    \"account\": {\n                        \"holder-type\": null,\n                        \"category\": null\n                    },\n                    \"status-code\": \"A\",\n                    \"product-bundle-id\": null\n                }\n            ]\n        }\n    }\n}",
+                      "options": {
+                        "raw": {
+                          "language": "json"
+                        }
+                      }
+                    },
+                    "url": {
+                      "raw": "{{baseURL}}/v1/fp/offer-rules/eligibility-evaluations",
+                      "host": [
+                        "{{baseURL}}"
+                      ],
+                      "path": [
+                        "v1",
+                        "fp",
+                        "offer-rules",
+                        "eligibility-evaluations"
+                      ]
+                    },
+                    "description": "Decision Model: R01 | Prioridad: P0 | Canal: MA\nES CLIENTE=SI | EDAD<=12 | CA PESOS<=1 CA USD<=2 | PREFILTRO APRUEBA=NO | Motivo esperado: Edad inferior a la permitida (code 1)"
+                  },
+                  "response": []
+                }
+              ],
+              "event": [
+                {
+                  "listen": "prerequest",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "// 1. Genera edad aleatoria según la banda del caso (nombre del request)",
+                      "const name = pm.info.requestName || '';",
+                      "let minAge, maxAge;",
+                      "",
+                      "if (name.includes('<=12')) {",
+                      "    minAge = 2;  // Rango seguro (evita 0 o 1)",
+                      "    maxAge = 11; // Evita el límite exacto de 12",
+                      "} else if (name.toLowerCase().includes('adolescente')) {",
+                      "    minAge = 14; // Rango seguro para adolescentes (14 a 17)",
+                      "    maxAge = 17;",
+                      "} else if (name.toLowerCase().includes('adulto')) {",
+                      "    minAge = 20; // Rango seguro para adultos",
+                      "    maxAge = 60;",
+                      "}",
+                      "",
+                      "if (minAge !== undefined && pm.request.body && pm.request.body.raw) {",
+                      "    const expectedAge = Math.floor(Math.random() * (maxAge - minAge + 1)) + minAge;",
+                      "    ",
+                      "    // Año de nacimiento dinámico (fijado al 1 de enero para evitar desfasajes UTC)",
+                      "    const currentYear = new Date().getFullYear();",
+                      "    const birthYear = currentYear - expectedAge;",
+                      "    const birthDateStr = `${birthYear}-01-01`;",
+                      "",
+                      "    pm.variables.set('expectedAge', expectedAge);",
+                      "",
+                      "    const body = JSON.parse(pm.request.body.raw);",
+                      "    body.party['birth-date'] = birthDateStr;",
+                      "",
+                      "    // 2. Dinamizar cantidad de CBU / CVU en los casos que prueban la regla \"CBU/CVU >= 21\"",
+                      "    if (name.toUpperCase().includes('CBU/CVU')) {",
+                      "        // Genera un número aleatorio entre 21 y 99",
+                      "        const randomTotalAccounts = Math.floor(Math.random() * (99 - 21 + 1)) + 21;",
+                      "        body.party['total-account'] = randomTotalAccounts;",
+                      "        pm.variables.set('expectedTotalAccounts', randomTotalAccounts);",
+                      "        console.log(`[${name}] total-account aleatorio generado: ${randomTotalAccounts}`);",
+                      "    }",
+                      "",
+                      "    // Actualiza el body de la petición",
+                      "    pm.request.body.update(JSON.stringify(body, null, 4));",
+                      "",
+                      "    console.log(`[${name}] Edad aleatoria: ${expectedAge} | birth-date: ${birthDateStr}`);",
+                      "}"
+                    ]
+                  }
+                },
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "// ================================================================",
+                      "// ASSERTIONS COMUNES - P0 RECHAZOS PREFILTRO",
+                      "// Technical contract + common business invariants.",
+                      "// ================================================================",
+                      "",
+                      "pm.test('HTTP status is 200', function () {",
+                      "    pm.response.to.have.status(200);",
+                      "});",
+                      "",
+                      "pm.test('Response Content-Type is JSON', function () {",
+                      "    pm.expect(pm.response.headers.get('Content-Type') || '').to.include('application/json');",
+                      "});",
+                      "",
+                      "if (pm.response.code === 200) {",
+                      "    const json = pm.response.json();",
+                      "    const requestBody = JSON.parse(pm.request.body.raw || '{}');",
+                      "    const expectedAge = Number(pm.variables.get('expectedAge'));",
+                      "",
+                      "    pm.test('Response has the minimum expected contract', function () {",
+                      "        pm.expect(json).to.be.an('object');",
+                      "        pm.expect(json['commercial-offers']).to.be.an('array');",
+                      "        pm.expect(json['is-pre-screening']).to.be.a('boolean');",
+                      "        pm.expect(json.party).to.be.an('object');",
+                      "        pm.expect(json['rejection-reasons']).to.be.an('array');",
+                      "        pm.expect(json['status-code']).to.be.a('string');",
+                      "        pm.expect(json['transaction-context']).to.be.an('object');",
+                      "    });",
+                      "",
+                      "    pm.test('Prefiltro rejects and does not generate offers', function () {",
+                      "        pm.expect(json['status-code']).to.eql('REJECTED');",
+                      "        pm.expect(json['commercial-offers']).to.be.empty;",
+                      "        pm.expect(json['is-pre-screening']).to.be.false;",
+                      "        pm.expect(json.party['offer-segment']).to.be.null;",
+                      "    });",
+                      "",
+                      "    pm.test('Prefilter rejection description is consistent', function () {",
+                      "        pm.expect(json['pre-screening-description']).to.eql('Se genero uno o más rechazos.');",
+                      "    });",
+                      "",
+                      "    pm.test('Exactly one rejection reason is returned for this isolated rule scenario', function () {",
+                      "        pm.expect(json['rejection-reasons']).to.have.lengthOf(1);",
+                      "    });",
+                      "",
+                      "    pm.test('Party identity and customer flag correspond to the request', function () {",
+                      "        pm.expect(json.party['taxpayer-number']).to.eql(requestBody.party['taxpayer-number']);",
+                      "        pm.expect(json.party['is-customer']).to.eql(requestBody.party['is-customer']);",
+                      "    });",
+                      "",
+                      "    pm.test('Returned age matches generated test data and expected partition', function () {",
+                      "        pm.expect(json.party.age).to.eql(expectedAge);",
+                      "        const name = (pm.info.requestName || '').toLowerCase();",
+                      "        if (name.includes('<=12')) {",
+                      "            pm.expect(json.party.age).to.be.at.most(12);",
+                      "        } else if (name.includes('adolescente')) {",
+                      "            pm.expect(json.party.age).to.be.within(13, 17);",
+                      "        } else if (name.includes('adulto')) {",
+                      "            pm.expect(json.party.age).to.be.at.least(18);",
+                      "        }",
+                      "    });",
+                      "",
+                      "    pm.test('Request belongs to expected ONB channel/subchannel model', function () {",
+                      "        pm.expect(requestBody['request-channel']).to.eql(20);",
+                      "        const name = pm.info.requestName || '';",
+                      "        if (name.startsWith('MA |')) {",
+                      "            pm.expect(requestBody['request-sub-channel']).to.eql(8);",
+                      "        } else if (name.startsWith('PS |')) {",
+                      "            pm.expect(requestBody['request-sub-channel']).to.eql(9);",
+                      "        }",
+                      "    });",
+                      "",
+                      "    pm.test('Transaction context is successful', function () {",
+                      "        pm.expect(json['transaction-context'].code).to.eql('10002');",
+                      "        pm.expect(json['transaction-context']['code-description']).to.eql('Operación exitosa.');",
+                      "        pm.expect(json['transaction-context']['time-stamp']).to.be.a('string').and.not.empty;",
+                      "    });",
+                      "}"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "PS - Subcanal 9",
+              "description": "PS | request-channel 20 | request-sub-channel 9. La carpeta hereda data dinámica y assertions comunes estables para Newman.",
+              "item": [
+                {
+                  "name": "PS | Edad <=12 - No cliente",
+                  "event": [
+                    {
+                      "listen": "test",
+                      "script": {
+                        "type": "text/javascript",
+                        "exec": [
+                          "// ================================================================",
+                          "// ASSERTIONS ESPECÍFICAS - R01",
+                          "// ================================================================",
+                          "",
+                          "if (pm.response.code === 200) {",
+                          "    const json = pm.response.json();",
+                          "    const requestBody = JSON.parse(pm.request.body.raw || '{}');",
+                          "",
+                          "    pm.test('Expected rejection code is 1', function () {",
+                          "        const reasons = json['rejection-reasons'] || [];",
+                          "        pm.expect(String(reasons[0]?.code)).to.eql('1');",
+                          "    });",
+                          "",
+                          "    pm.test('Expected rejection description is correct', function () {",
+                          "        const reasons = json['rejection-reasons'] || [];",
+                          "        pm.expect(reasons[0]?.description).to.eql('Edad inferior a la permitida');",
+                          "    });",
+                          "}"
+                        ]
+                      }
+                    }
+                  ],
+                  "request": {
+                    "auth": {
+                      "type": "bearer",
+                      "bearer": [
+                        {
+                          "key": "token",
+                          "value": "{{AccessToken}}",
+                          "type": "string"
+                        }
+                      ]
+                    },
+                    "method": "POST",
+                    "header": [
+                      {
+                        "key": "Accept",
+                        "value": "application/json",
+                        "type": "text"
+                      },
+                      {
+                        "key": "Content-Type",
+                        "value": "application/json",
+                        "type": "text"
+                      },
+                      {
+                        "key": "x-request-id",
+                        "value": "{{$randomUUID}}",
+                        "type": "text"
+                      },
+                      {
+                        "key": "x-customer-id",
+                        "value": "{{xCustomerId}}",
+                        "type": "text"
+                      },
+                      {
+                        "key": "Host",
+                        "value": "{{headerHost}}",
+                        "type": "text"
+                      }
+                    ],
+                    "body": {
+                      "mode": "raw",
+                      "raw": "{\n    \"request-channel\": 20,\n    \"request-sub-channel\": 9,\n    \"utm-tracking\": {\n        \"source\": \"web\",\n        \"medium\": \"landing\",\n        \"campaign\": \"youth\",\n        \"content\": \"placeholder\"\n    },\n    \"references\": null,\n    \"party\": {\n        \"taxpayer-number\": \"20062484838\",\n        \"birth-date\": \"2020-07-07\",\n        \"is-customer\": false,\n        \"is-digital-customer\": false,\n        \"bank-segment-code\": null,\n        \"segment-code\": null,\n        \"sub-segment-code\": null,\n        \"total-account\": 5,\n        \"process-type\": \"ENLINEA\",\n        \"product\": {\n            \"category\": null,\n            \"details\": []\n        }\n    }\n}",
+                      "options": {
+                        "raw": {
+                          "language": "json"
+                        }
+                      }
+                    },
+                    "url": {
+                      "raw": "{{baseURL}}/v1/fp/offer-rules/eligibility-evaluations",
+                      "host": [
+                        "{{baseURL}}"
+                      ],
+                      "path": [
+                        "v1",
+                        "fp",
+                        "offer-rules",
+                        "eligibility-evaluations"
+                      ]
+                    },
+                    "description": "Decision Model: R01 | Prioridad: P0 | Canal: PS\nCANAL 20 SUBCANAL 9 | ES CLIENTE=NO | EDAD<=12 | PREFILTRO APRUEBA=NO | Motivo esperado: Edad inferior a la permitida (code 1)"
+                  },
+                  "response": []
+                },
+                {
+                  "name": "PS | Edad <=12 - Cliente",
+                  "event": [
+                    {
+                      "listen": "test",
+                      "script": {
+                        "type": "text/javascript",
+                        "exec": [
+                          "// ================================================================",
+                          "// ASSERTIONS ESPECÍFICAS - R01",
+                          "// ================================================================",
+                          "",
+                          "if (pm.response.code === 200) {",
+                          "    const json = pm.response.json();",
+                          "    const requestBody = JSON.parse(pm.request.body.raw || '{}');",
+                          "",
+                          "    pm.test('Expected rejection code is 1', function () {",
+                          "        const reasons = json['rejection-reasons'] || [];",
+                          "        pm.expect(String(reasons[0]?.code)).to.eql('1');",
+                          "    });",
+                          "",
+                          "    pm.test('Expected rejection description is correct', function () {",
+                          "        const reasons = json['rejection-reasons'] || [];",
+                          "        pm.expect(reasons[0]?.description).to.eql('Edad inferior a la permitida');",
+                          "    });",
+                          "}"
+                        ]
+                      }
+                    }
+                  ],
+                  "request": {
+                    "auth": {
+                      "type": "bearer",
+                      "bearer": [
+                        {
+                          "key": "token",
+                          "value": "{{AccessToken}}",
+                          "type": "string"
+                        }
+                      ]
+                    },
+                    "method": "POST",
+                    "header": [
+                      {
+                        "key": "Accept",
+                        "value": "application/json",
+                        "type": "text"
+                      },
+                      {
+                        "key": "Content-Type",
+                        "value": "application/json",
+                        "type": "text"
+                      },
+                      {
+                        "key": "x-request-id",
+                        "value": "{{$randomUUID}}",
+                        "type": "text"
+                      },
+                      {
+                        "key": "x-customer-id",
+                        "value": "{{xCustomerId}}",
+                        "type": "text"
+                      },
+                      {
+                        "key": "Host",
+                        "value": "{{headerHost}}",
+                        "type": "text"
+                      }
+                    ],
+                    "body": {
+                      "mode": "raw",
+                      "raw": "{\n    \"request-channel\": 20,\n    \"request-sub-channel\": 9,\n    \"utm-tracking\": {\n        \"source\": \"web\",\n        \"medium\": \"landing\",\n        \"campaign\": \"youth\",\n        \"content\": \"placeholder\"\n    },\n    \"references\": null,\n    \"party\": {\n        \"taxpayer-number\": \"20113669714\",\n        \"birth-date\": \"2020-07-07\",\n        \"is-customer\": true,\n        \"is-digital-customer\": true,\n        \"bank-segment-code\": \"01\",\n        \"segment-code\": \"01\",\n        \"sub-segment-code\": \"02\",\n        \"total-account\": 5,\n        \"process-type\": \"ENLINEA\",\n        \"product\": {\n            \"category\": \"02\",\n            \"details\": [\n                {\n                    \"id\": \"4\",\n                    \"description\": \"CUENTA DE AHORROS\",\n                    \"currency-id\": 2,\n                    \"account\": {\n                        \"holder-type\": \"T\",\n                        \"category\": \"SA\"\n                    },\n                    \"status-code\": \"A\",\n                    \"product-bundle-id\": 0\n                },\n                {\n                    \"id\": \"4\",\n                    \"description\": \"CUENTA DE AHORROS\",\n                    \"currency-id\": 2,\n                    \"account\": {\n                        \"holder-type\": \"T\",\n                        \"category\": \"SA\"\n                    },\n                    \"status-code\": \"I\",\n                    \"product-bundle-id\": 0\n                },\n                {\n                    \"id\": \"4\",\n                    \"description\": \"CUENTA DE AHORROS\",\n                    \"currency-id\": 80,\n                    \"account\": {\n                        \"holder-type\": \"T\",\n                        \"category\": \"KME\"\n                    },\n                    \"status-code\": \"A\",\n                    \"product-bundle-id\": 0\n                },\n                {\n                    \"id\": \"16\",\n                    \"description\": \"ATM - ADMINISTRACION TARJETAS DE DEBITO\",\n                    \"currency-id\": null,\n                    \"account\": {\n                        \"holder-type\": null,\n                        \"category\": null\n                    },\n                    \"status-code\": \"A\",\n                    \"product-bundle-id\": null\n                }\n            ]\n        }\n    }\n}",
+                      "options": {
+                        "raw": {
+                          "language": "json"
+                        }
+                      }
+                    },
+                    "url": {
+                      "raw": "{{baseURL}}/v1/fp/offer-rules/eligibility-evaluations",
+                      "host": [
+                        "{{baseURL}}"
+                      ],
+                      "path": [
+                        "v1",
+                        "fp",
+                        "offer-rules",
+                        "eligibility-evaluations"
+                      ]
+                    },
+                    "description": "Decision Model: R01 | Prioridad: P0 | Canal: PS\nES CLIENTE=SI | EDAD<=12 | CA PESOS<=1 CA USD<=2 | PREFILTRO APRUEBA=NO | Motivo esperado: Edad inferior a la permitida (code 1)"
+                  },
+                  "response": []
+                }
+              ],
+              "event": [
+                {
+                  "listen": "prerequest",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "// 1. Genera edad aleatoria según la banda del caso (nombre del request)",
+                      "const name = pm.info.requestName || '';",
+                      "let minAge, maxAge;",
+                      "",
+                      "if (name.includes('<=12')) {",
+                      "    minAge = 2;  // Rango seguro (evita 0 o 1)",
+                      "    maxAge = 11; // Evita el límite exacto de 12",
+                      "} else if (name.toLowerCase().includes('adolescente')) {",
+                      "    minAge = 14; // Rango seguro para adolescentes (14 a 17)",
+                      "    maxAge = 17;",
+                      "} else if (name.toLowerCase().includes('adulto')) {",
+                      "    minAge = 20; // Rango seguro para adultos",
+                      "    maxAge = 60;",
+                      "}",
+                      "",
+                      "if (minAge !== undefined && pm.request.body && pm.request.body.raw) {",
+                      "    const expectedAge = Math.floor(Math.random() * (maxAge - minAge + 1)) + minAge;",
+                      "    ",
+                      "    // Año de nacimiento dinámico (fijado al 1 de enero para evitar desfasajes UTC)",
+                      "    const currentYear = new Date().getFullYear();",
+                      "    const birthYear = currentYear - expectedAge;",
+                      "    const birthDateStr = `${birthYear}-01-01`;",
+                      "",
+                      "    pm.variables.set('expectedAge', expectedAge);",
+                      "",
+                      "    const body = JSON.parse(pm.request.body.raw);",
+                      "    body.party['birth-date'] = birthDateStr;",
+                      "",
+                      "    // 2. Dinamizar cantidad de CBU / CVU en los casos que prueban la regla \"CBU/CVU >= 21\"",
+                      "    if (name.toUpperCase().includes('CBU/CVU')) {",
+                      "        // Genera un número aleatorio entre 21 y 99",
+                      "        const randomTotalAccounts = Math.floor(Math.random() * (99 - 21 + 1)) + 21;",
+                      "        body.party['total-account'] = randomTotalAccounts;",
+                      "        pm.variables.set('expectedTotalAccounts', randomTotalAccounts);",
+                      "        console.log(`[${name}] total-account aleatorio generado: ${randomTotalAccounts}`);",
+                      "    }",
+                      "",
+                      "    // Actualiza el body de la petición",
+                      "    pm.request.body.update(JSON.stringify(body, null, 4));",
+                      "",
+                      "    console.log(`[${name}] Edad aleatoria: ${expectedAge} | birth-date: ${birthDateStr}`);",
+                      "}"
+                    ]
+                  }
+                },
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "// ================================================================",
+                      "// ASSERTIONS COMUNES - P0 RECHAZOS PREFILTRO",
+                      "// Technical contract + common business invariants.",
+                      "// ================================================================",
+                      "",
+                      "pm.test('HTTP status is 200', function () {",
+                      "    pm.response.to.have.status(200);",
+                      "});",
+                      "",
+                      "pm.test('Response Content-Type is JSON', function () {",
+                      "    pm.expect(pm.response.headers.get('Content-Type') || '').to.include('application/json');",
+                      "});",
+                      "",
+                      "if (pm.response.code === 200) {",
+                      "    const json = pm.response.json();",
+                      "    const requestBody = JSON.parse(pm.request.body.raw || '{}');",
+                      "    const expectedAge = Number(pm.variables.get('expectedAge'));",
+                      "",
+                      "    pm.test('Response has the minimum expected contract', function () {",
+                      "        pm.expect(json).to.be.an('object');",
+                      "        pm.expect(json['commercial-offers']).to.be.an('array');",
+                      "        pm.expect(json['is-pre-screening']).to.be.a('boolean');",
+                      "        pm.expect(json.party).to.be.an('object');",
+                      "        pm.expect(json['rejection-reasons']).to.be.an('array');",
+                      "        pm.expect(json['status-code']).to.be.a('string');",
+                      "        pm.expect(json['transaction-context']).to.be.an('object');",
+                      "    });",
+                      "",
+                      "    pm.test('Prefiltro rejects and does not generate offers', function () {",
+                      "        pm.expect(json['status-code']).to.eql('REJECTED');",
+                      "        pm.expect(json['commercial-offers']).to.be.empty;",
+                      "        pm.expect(json['is-pre-screening']).to.be.false;",
+                      "        pm.expect(json.party['offer-segment']).to.be.null;",
+                      "    });",
+                      "",
+                      "    pm.test('Prefilter rejection description is consistent', function () {",
+                      "        pm.expect(json['pre-screening-description']).to.eql('Se genero uno o más rechazos.');",
+                      "    });",
+                      "",
+                      "    pm.test('Exactly one rejection reason is returned for this isolated rule scenario', function () {",
+                      "        pm.expect(json['rejection-reasons']).to.have.lengthOf(1);",
+                      "    });",
+                      "",
+                      "    pm.test('Party identity and customer flag correspond to the request', function () {",
+                      "        pm.expect(json.party['taxpayer-number']).to.eql(requestBody.party['taxpayer-number']);",
+                      "        pm.expect(json.party['is-customer']).to.eql(requestBody.party['is-customer']);",
+                      "    });",
+                      "",
+                      "    pm.test('Returned age matches generated test data and expected partition', function () {",
+                      "        pm.expect(json.party.age).to.eql(expectedAge);",
+                      "        const name = (pm.info.requestName || '').toLowerCase();",
+                      "        if (name.includes('<=12')) {",
+                      "            pm.expect(json.party.age).to.be.at.most(12);",
+                      "        } else if (name.includes('adolescente')) {",
+                      "            pm.expect(json.party.age).to.be.within(13, 17);",
+                      "        } else if (name.includes('adulto')) {",
+                      "            pm.expect(json.party.age).to.be.at.least(18);",
+                      "        }",
+                      "    });",
+                      "",
+                      "    pm.test('Request belongs to expected ONB channel/subchannel model', function () {",
+                      "        pm.expect(requestBody['request-channel']).to.eql(20);",
+                      "        const name = pm.info.requestName || '';",
+                      "        if (name.startsWith('MA |')) {",
+                      "            pm.expect(requestBody['request-sub-channel']).to.eql(8);",
+                      "        } else if (name.startsWith('PS |')) {",
+                      "            pm.expect(requestBody['request-sub-channel']).to.eql(9);",
+                      "        }",
+                      "    });",
+                      "",
+                      "    pm.test('Transaction context is successful', function () {",
+                      "        pm.expect(json['transaction-context'].code).to.eql('10002');",
+                      "        pm.expect(json['transaction-context']['code-description']).to.eql('Operación exitosa.');",
+                      "        pm.expect(json['transaction-context']['time-stamp']).to.be.a('string').and.not.empty;",
+                      "    });",
+                      "}"
+                    ]
+                  }
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "name": "R02 - Límites de cuentas de ahorro",
+          "description": "Decision Model R02 | Prioridad P0\nRegla: límites de CA en pesos/USD producen rechazo de Prefiltro según la partición evaluada.\nExpected: REJECTED, commercial-offers vacío, rejection code 2.\nCobertura actual: CA pesos >=2 adulto, CA USD >=2 adolescente y CA USD >=3 adulto, MA/PS.\nLos límites permitidos inmediatamente anteriores se cubrirán en Boundary Suite.",
+          "item": [
+            {
+              "name": "MA - Subcanal 8",
+              "description": "MA | request-channel 20 | request-sub-channel 8. La carpeta hereda data dinámica y assertions comunes estables para Newman.",
+              "item": [
+                {
+                  "name": "MA | CA pesos >=2 - Cliente adulto",
+                  "event": [
+                    {
+                      "listen": "test",
+                      "script": {
+                        "type": "text/javascript",
+                        "exec": [
+                          "// ================================================================",
+                          "// ASSERTIONS ESPECÍFICAS - R02",
+                          "// ================================================================",
+                          "",
+                          "if (pm.response.code === 200) {",
+                          "    const json = pm.response.json();",
+                          "    const requestBody = JSON.parse(pm.request.body.raw || '{}');",
+                          "",
+                          "    pm.test('Expected rejection code is 2', function () {",
+                          "        const reasons = json['rejection-reasons'] || [];",
+                          "        pm.expect(String(reasons[0]?.code)).to.eql('2');",
+                          "    });",
+                          "",
+                          "    pm.test('Expected rejection description is correct', function () {",
+                          "        const reasons = json['rejection-reasons'] || [];",
+                          "        pm.expect(reasons[0]?.description).to.eql('No cumple requisitos de Prefiltro');",
+                          "    });",
+                          "",
+                          "    pm.test('Savings totals correspond to CA pesos rejection model', function () {",
+                          "        pm.expect(json.party.account['total-savings-ars']).to.eql(2);",
+                          "        pm.expect(json.party.account['total-savings-usd']).to.eql(1);",
+                          "    });",
+                          "}"
+                        ]
+                      }
+                    }
+                  ],
+                  "request": {
+                    "auth": {
+                      "type": "bearer",
+                      "bearer": [
+                        {
+                          "key": "token",
+                          "value": "{{AccessToken}}",
+                          "type": "string"
+                        }
+                      ]
+                    },
+                    "method": "POST",
+                    "header": [
+                      {
+                        "key": "Accept",
+                        "value": "application/json",
+                        "type": "text"
+                      },
+                      {
+                        "key": "Content-Type",
+                        "value": "application/json",
+                        "type": "text"
+                      },
+                      {
+                        "key": "x-request-id",
+                        "value": "{{$randomUUID}}",
+                        "type": "text"
+                      },
+                      {
+                        "key": "x-customer-id",
+                        "value": "{{xCustomerId}}",
+                        "type": "text"
+                      },
+                      {
+                        "key": "Host",
+                        "value": "{{headerHost}}",
+                        "type": "text"
+                      }
+                    ],
+                    "body": {
+                      "mode": "raw",
+                      "raw": "{\n    \"request-channel\": 20,\n    \"request-sub-channel\": 8,\n    \"utm-tracking\": {\n        \"source\": \"web\",\n        \"medium\": \"landing\",\n        \"campaign\": \"youth\",\n        \"content\": \"placeholder\"\n    },\n    \"references\": null,\n    \"party\": {\n        \"taxpayer-number\": \"20113669714\",\n        \"birth-date\": \"2000-07-07\",\n        \"is-customer\": true,\n        \"is-digital-customer\": true,\n        \"bank-segment-code\": \"01\",\n        \"segment-code\": \"01\",\n        \"sub-segment-code\": \"02\",\n        \"total-account\": 5,\n        \"process-type\": \"ENLINEA\",\n        \"product\": {\n            \"category\": \"02\",\n            \"details\": [\n                {\n                    \"id\": \"4\",\n                    \"description\": \"CUENTA DE AHORROS\",\n                    \"currency-id\": 2,\n                    \"account\": {\n                        \"holder-type\": \"T\",\n                        \"category\": \"SA\"\n                    },\n                    \"status-code\": \"A\",\n                    \"product-bundle-id\": 0\n                },\n                {\n                    \"id\": \"4\",\n                    \"description\": \"CUENTA DE AHORROS\",\n                    \"currency-id\": 80,\n                    \"account\": {\n                        \"holder-type\": \"T\",\n                        \"category\": \"SA\"\n                    },\n                    \"status-code\": \"A\",\n                    \"product-bundle-id\": 0\n                },\n                {\n                    \"id\": \"4\",\n                    \"description\": \"CUENTA DE AHORROS\",\n                    \"currency-id\": 80,\n                    \"account\": {\n                        \"holder-type\": \"T\",\n                        \"category\": \"KME\"\n                    },\n                    \"status-code\": \"A\",\n                    \"product-bundle-id\": 0\n                },\n                {\n                    \"id\": \"16\",\n                    \"description\": \"ATM - ADMINISTRACION TARJETAS DE DEBITO\",\n                    \"currency-id\": null,\n                    \"account\": {\n                        \"holder-type\": null,\n                        \"category\": null\n                    },\n                    \"status-code\": \"A\",\n                    \"product-bundle-id\": null\n                }\n            ]\n        }\n    }\n}",
+                      "options": {
+                        "raw": {
+                          "language": "json"
+                        }
+                      }
+                    },
+                    "url": {
+                      "raw": "{{baseURL}}/v1/fp/offer-rules/eligibility-evaluations",
+                      "host": [
+                        "{{baseURL}}"
+                      ],
+                      "path": [
+                        "v1",
+                        "fp",
+                        "offer-rules",
+                        "eligibility-evaluations"
+                      ]
+                    },
+                    "description": "Decision Model: R02 | Prioridad: P0 | Canal: MA\nES CLIENTE=SI | EDAD>=18 | CA PESOS>=2 | PREFILTRO APRUEBA=NO | Motivo esperado: No cumple requisitos de Prefiltro (code 2)"
+                  },
+                  "response": []
+                },
+                {
+                  "name": "MA | CACD >=2 - Cliente adolescente",
+                  "event": [
+                    {
+                      "listen": "test",
+                      "script": {
+                        "type": "text/javascript",
+                        "exec": [
+                          "// ================================================================",
+                          "// ASSERTIONS ESPECÍFICAS - R02",
+                          "// ================================================================",
+                          "",
+                          "if (pm.response.code === 200) {",
+                          "    const json = pm.response.json();",
+                          "    const requestBody = JSON.parse(pm.request.body.raw || '{}');",
+                          "",
+                          "    pm.test('Expected rejection code is 2', function () {",
+                          "        const reasons = json['rejection-reasons'] || [];",
+                          "        pm.expect(String(reasons[0]?.code)).to.eql('2');",
+                          "    });",
+                          "",
+                          "    pm.test('Expected rejection description is correct', function () {",
+                          "        const reasons = json['rejection-reasons'] || [];",
+                          "        pm.expect(reasons[0]?.description).to.eql('No cumple requisitos de Prefiltro');",
+                          "    });",
+                          "",
+                          "    pm.test('Savings totals correspond to adolescent CA USD rejection model', function () {",
+                          "        pm.expect(json.party.account['total-savings-ars']).to.eql(1);",
+                          "        pm.expect(json.party.account['total-savings-usd']).to.eql(2);",
+                          "        pm.expect(json.party['has-bundle']).to.be.false;",
+                          "        pm.expect(json.party['has-credit-card']).to.be.false;",
+                          "    });",
+                          "}"
+                        ]
+                      }
+                    }
+                  ],
+                  "request": {
+                    "auth": {
+                      "type": "bearer",
+                      "bearer": [
+                        {
+                          "key": "token",
+                          "value": "{{AccessToken}}",
+                          "type": "string"
+                        }
+                      ]
+                    },
+                    "method": "POST",
+                    "header": [
+                      {
+                        "key": "Accept",
+                        "value": "application/json",
+                        "type": "text"
+                      },
+                      {
+                        "key": "Content-Type",
+                        "value": "application/json",
+                        "type": "text"
+                      },
+                      {
+                        "key": "x-request-id",
+                        "value": "{{$randomUUID}}",
+                        "type": "text"
+                      },
+                      {
+                        "key": "x-customer-id",
+                        "value": "{{xCustomerId}}",
+                        "type": "text"
+                      },
+                      {
+                        "key": "Host",
+                        "value": "{{headerHost}}",
+                        "type": "text"
+                      }
+                    ],
+                    "body": {
+                      "mode": "raw",
+                      "raw": "{\n    \"request-channel\": 20,\n    \"request-sub-channel\": 8,\n    \"utm-tracking\": {\n        \"source\": \"web\",\n        \"medium\": \"landing\",\n        \"campaign\": \"youth\",\n        \"content\": \"placeholder\"\n    },\n    \"references\": null,\n    \"party\": {\n        \"taxpayer-number\": \"20113669714\",\n        \"birth-date\": \"2011-07-07\",\n        \"is-customer\": true,\n        \"is-digital-customer\": true,\n        \"bank-segment-code\": \"01\",\n        \"segment-code\": \"01\",\n        \"sub-segment-code\": \"02\",\n        \"total-account\": 5,\n        \"process-type\": \"ENLINEA\",\n        \"product\": {\n            \"category\": \"02\",\n            \"details\": [\n                {\n                    \"id\": \"4\",\n                    \"description\": \"CUENTA DE AHORROS\",\n                    \"currency-id\": 2,\n                    \"account\": {\n                        \"holder-type\": \"T\",\n                        \"category\": \"CGD\"\n                    },\n                    \"status-code\": \"A\",\n                    \"product-bundle-id\": 0\n                },\n                {\n                    \"id\": \"4\",\n                    \"description\": \"CUENTA DE AHORROS\",\n                    \"currency-id\": 2,\n                    \"account\": {\n                        \"holder-type\": \"T\",\n                        \"category\": \"CGD\"\n                    },\n                    \"status-code\": \"A\",\n                    \"product-bundle-id\": 0\n                },\n                {\n                    \"id\": \"4\",\n                    \"description\": \"CUENTA DE AHORROS\",\n                    \"currency-id\": 80,\n                    \"account\": {\n                        \"holder-type\": \"T\",\n                        \"category\": \"KME\"\n                    },\n                    \"status-code\": \"A\",\n                    \"product-bundle-id\": 0\n                },\n                {\n                    \"id\": \"16\",\n                    \"description\": \"ATM - ADMINISTRACION TARJETAS DE DEBITO\",\n                    \"currency-id\": null,\n                    \"account\": {\n                        \"holder-type\": null,\n                        \"category\": null\n                    },\n                    \"status-code\": \"A\",\n                    \"product-bundle-id\": null\n                }\n            ]\n        }\n    }\n}",
+                      "options": {
+                        "raw": {
+                          "language": "json"
+                        }
+                      }
+                    },
+                    "url": {
+                      "raw": "{{baseURL}}/v1/fp/offer-rules/eligibility-evaluations",
+                      "host": [
+                        "{{baseURL}}"
+                      ],
+                      "path": [
+                        "v1",
+                        "fp",
+                        "offer-rules",
+                        "eligibility-evaluations"
+                      ]
+                    },
+                    "description": "Decision Model: R02 | Prioridad: P0 | Canal: MA\nES CLIENTE=SI | EDAD 13-17 | CA USD>=2 (CACD) | PREFILTRO APRUEBA=NO | Motivo esperado: No cumple requisitos de Prefiltro (code 2)"
+                  },
+                  "response": []
+                },
+                {
+                  "name": "MA | CACD >=3 - Cliente adulto",
+                  "event": [
+                    {
+                      "listen": "test",
+                      "script": {
+                        "type": "text/javascript",
+                        "exec": [
+                          "// ================================================================",
+                          "// ASSERTIONS ESPECÍFICAS - R02",
+                          "// ================================================================",
+                          "",
+                          "if (pm.response.code === 200) {",
+                          "    const json = pm.response.json();",
+                          "    const requestBody = JSON.parse(pm.request.body.raw || '{}');",
+                          "",
+                          "    pm.test('Expected rejection code is 2', function () {",
+                          "        const reasons = json['rejection-reasons'] || [];",
+                          "        pm.expect(String(reasons[0]?.code)).to.eql('2');",
+                          "    });",
+                          "",
+                          "    pm.test('Expected rejection description is correct', function () {",
+                          "        const reasons = json['rejection-reasons'] || [];",
+                          "        pm.expect(reasons[0]?.description).to.eql('No cumple requisitos de Prefiltro');",
+                          "    });",
+                          "",
+                          "    pm.test('Savings totals correspond to adult CA USD rejection model', function () {",
+                          "        pm.expect(json.party.account['total-savings-ars']).to.eql(1);",
+                          "        pm.expect(json.party.account['total-savings-usd']).to.eql(3);",
+                          "        pm.expect(json.party['has-bundle']).to.be.false;",
+                          "        pm.expect(json.party['has-credit-card']).to.be.false;",
+                          "    });",
+                          "}"
+                        ]
+                      }
+                    }
+                  ],
+                  "request": {
+                    "auth": {
+                      "type": "bearer",
+                      "bearer": [
+                        {
+                          "key": "token",
+                          "value": "{{AccessToken}}",
+                          "type": "string"
+                        }
+                      ]
+                    },
+                    "method": "POST",
+                    "header": [
+                      {
+                        "key": "Accept",
+                        "value": "application/json",
+                        "type": "text"
+                      },
+                      {
+                        "key": "Content-Type",
+                        "value": "application/json",
+                        "type": "text"
+                      },
+                      {
+                        "key": "x-request-id",
+                        "value": "{{$randomUUID}}",
+                        "type": "text"
+                      },
+                      {
+                        "key": "x-customer-id",
+                        "value": "{{xCustomerId}}",
+                        "type": "text"
+                      },
+                      {
+                        "key": "Host",
+                        "value": "{{headerHost}}",
+                        "type": "text"
+                      }
+                    ],
+                    "body": {
+                      "mode": "raw",
+                      "raw": "{\n    \"request-channel\": 20,\n    \"request-sub-channel\": 8,\n    \"utm-tracking\": {\n        \"source\": \"web\",\n        \"medium\": \"landing\",\n        \"campaign\": \"youth\",\n        \"content\": \"placeholder\"\n    },\n    \"references\": null,\n    \"party\": {\n        \"taxpayer-number\": \"20113669714\",\n        \"birth-date\": \"2000-07-07\",\n        \"is-customer\": true,\n        \"is-digital-customer\": true,\n        \"bank-segment-code\": \"01\",\n        \"segment-code\": \"01\",\n        \"sub-segment-code\": \"02\",\n        \"total-account\": 5,\n        \"process-type\": \"ENLINEA\",\n        \"product\": {\n            \"category\": \"02\",\n            \"details\": [\n                {\n                    \"id\": \"4\",\n                    \"description\": \"CUENTA DE AHORROS\",\n                    \"currency-id\": 2,\n                    \"account\": {\n                        \"holder-type\": \"T\",\n                        \"category\": \"CGD\"\n                    },\n                    \"status-code\": \"A\",\n                    \"product-bundle-id\": 0\n                },\n                {\n                    \"id\": \"4\",\n                    \"description\": \"CUENTA DE AHORROS\",\n                    \"currency-id\": 2,\n                    \"account\": {\n                        \"holder-type\": \"T\",\n                        \"category\": \"CGD\"\n                    },\n                    \"status-code\": \"A\",\n                    \"product-bundle-id\": 0\n                },\n                {\n                    \"id\": \"4\",\n                    \"description\": \"CUENTA DE AHORROS\",\n                    \"currency-id\": 2,\n                    \"account\": {\n                        \"holder-type\": \"T\",\n                        \"category\": \"CGD\"\n                    },\n                    \"status-code\": \"A\",\n                    \"product-bundle-id\": 0\n                },\n                {\n                    \"id\": \"4\",\n                    \"description\": \"CUENTA DE AHORROS\",\n                    \"currency-id\": 80,\n                    \"account\": {\n                        \"holder-type\": \"T\",\n                        \"category\": \"KME\"\n                    },\n                    \"status-code\": \"A\",\n                    \"product-bundle-id\": 0\n                },\n                {\n                    \"id\": \"16\",\n                    \"description\": \"ATM - ADMINISTRACION TARJETAS DE DEBITO\",\n                    \"currency-id\": null,\n                    \"account\": {\n                        \"holder-type\": null,\n                        \"category\": null\n                    },\n                    \"status-code\": \"A\",\n                    \"product-bundle-id\": null\n                }\n            ]\n        }\n    }\n}",
+                      "options": {
+                        "raw": {
+                          "language": "json"
+                        }
+                      }
+                    },
+                    "url": {
+                      "raw": "{{baseURL}}/v1/fp/offer-rules/eligibility-evaluations",
+                      "host": [
+                        "{{baseURL}}"
+                      ],
+                      "path": [
+                        "v1",
+                        "fp",
+                        "offer-rules",
+                        "eligibility-evaluations"
+                      ]
+                    },
+                    "description": "Decision Model: R02 | Prioridad: P0 | Canal: MA\nES CLIENTE=SI | EDAD>=18 | CA USD>=3 (CACD) | PREFILTRO APRUEBA=NO | Motivo esperado: No cumple requisitos de Prefiltro (code 2)"
+                  },
+                  "response": []
+                }
+              ],
+              "event": [
+                {
+                  "listen": "prerequest",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "// 1. Genera edad aleatoria según la banda del caso (nombre del request)",
+                      "const name = pm.info.requestName || '';",
+                      "let minAge, maxAge;",
+                      "",
+                      "if (name.includes('<=12')) {",
+                      "    minAge = 2;  // Rango seguro (evita 0 o 1)",
+                      "    maxAge = 11; // Evita el límite exacto de 12",
+                      "} else if (name.toLowerCase().includes('adolescente')) {",
+                      "    minAge = 14; // Rango seguro para adolescentes (14 a 17)",
+                      "    maxAge = 17;",
+                      "} else if (name.toLowerCase().includes('adulto')) {",
+                      "    minAge = 20; // Rango seguro para adultos",
+                      "    maxAge = 60;",
+                      "}",
+                      "",
+                      "if (minAge !== undefined && pm.request.body && pm.request.body.raw) {",
+                      "    const expectedAge = Math.floor(Math.random() * (maxAge - minAge + 1)) + minAge;",
+                      "    ",
+                      "    // Año de nacimiento dinámico (fijado al 1 de enero para evitar desfasajes UTC)",
+                      "    const currentYear = new Date().getFullYear();",
+                      "    const birthYear = currentYear - expectedAge;",
+                      "    const birthDateStr = `${birthYear}-01-01`;",
+                      "",
+                      "    pm.variables.set('expectedAge', expectedAge);",
+                      "",
+                      "    const body = JSON.parse(pm.request.body.raw);",
+                      "    body.party['birth-date'] = birthDateStr;",
+                      "",
+                      "    // 2. Dinamizar cantidad de CBU / CVU en los casos que prueban la regla \"CBU/CVU >= 21\"",
+                      "    if (name.toUpperCase().includes('CBU/CVU')) {",
+                      "        // Genera un número aleatorio entre 21 y 99",
+                      "        const randomTotalAccounts = Math.floor(Math.random() * (99 - 21 + 1)) + 21;",
+                      "        body.party['total-account'] = randomTotalAccounts;",
+                      "        pm.variables.set('expectedTotalAccounts', randomTotalAccounts);",
+                      "        console.log(`[${name}] total-account aleatorio generado: ${randomTotalAccounts}`);",
+                      "    }",
+                      "",
+                      "    // Actualiza el body de la petición",
+                      "    pm.request.body.update(JSON.stringify(body, null, 4));",
+                      "",
+                      "    console.log(`[${name}] Edad aleatoria: ${expectedAge} | birth-date: ${birthDateStr}`);",
+                      "}"
+                    ]
+                  }
+                },
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "// ================================================================",
+                      "// ASSERTIONS COMUNES - P0 RECHAZOS PREFILTRO",
+                      "// Technical contract + common business invariants.",
+                      "// ================================================================",
+                      "",
+                      "pm.test('HTTP status is 200', function () {",
+                      "    pm.response.to.have.status(200);",
+                      "});",
+                      "",
+                      "pm.test('Response Content-Type is JSON', function () {",
+                      "    pm.expect(pm.response.headers.get('Content-Type') || '').to.include('application/json');",
+                      "});",
+                      "",
+                      "if (pm.response.code === 200) {",
+                      "    const json = pm.response.json();",
+                      "    const requestBody = JSON.parse(pm.request.body.raw || '{}');",
+                      "    const expectedAge = Number(pm.variables.get('expectedAge'));",
+                      "",
+                      "    pm.test('Response has the minimum expected contract', function () {",
+                      "        pm.expect(json).to.be.an('object');",
+                      "        pm.expect(json['commercial-offers']).to.be.an('array');",
+                      "        pm.expect(json['is-pre-screening']).to.be.a('boolean');",
+                      "        pm.expect(json.party).to.be.an('object');",
+                      "        pm.expect(json['rejection-reasons']).to.be.an('array');",
+                      "        pm.expect(json['status-code']).to.be.a('string');",
+                      "        pm.expect(json['transaction-context']).to.be.an('object');",
+                      "    });",
+                      "",
+                      "    pm.test('Prefiltro rejects and does not generate offers', function () {",
+                      "        pm.expect(json['status-code']).to.eql('REJECTED');",
+                      "        pm.expect(json['commercial-offers']).to.be.empty;",
+                      "        pm.expect(json['is-pre-screening']).to.be.false;",
+                      "        pm.expect(json.party['offer-segment']).to.be.null;",
+                      "    });",
+                      "",
+                      "    pm.test('Prefilter rejection description is consistent', function () {",
+                      "        pm.expect(json['pre-screening-description']).to.eql('Se genero uno o más rechazos.');",
+                      "    });",
+                      "",
+                      "    pm.test('Exactly one rejection reason is returned for this isolated rule scenario', function () {",
+                      "        pm.expect(json['rejection-reasons']).to.have.lengthOf(1);",
+                      "    });",
+                      "",
+                      "    pm.test('Party identity and customer flag correspond to the request', function () {",
+                      "        pm.expect(json.party['taxpayer-number']).to.eql(requestBody.party['taxpayer-number']);",
+                      "        pm.expect(json.party['is-customer']).to.eql(requestBody.party['is-customer']);",
+                      "    });",
+                      "",
+                      "    pm.test('Returned age matches generated test data and expected partition', function () {",
+                      "        pm.expect(json.party.age).to.eql(expectedAge);",
+                      "        const name = (pm.info.requestName || '').toLowerCase();",
+                      "        if (name.includes('<=12')) {",
+                      "            pm.expect(json.party.age).to.be.at.most(12);",
+                      "        } else if (name.includes('adolescente')) {",
+                      "            pm.expect(json.party.age).to.be.within(13, 17);",
+                      "        } else if (name.includes('adulto')) {",
+                      "            pm.expect(json.party.age).to.be.at.least(18);",
+                      "        }",
+                      "    });",
+                      "",
+                      "    pm.test('Request belongs to expected ONB channel/subchannel model', function () {",
+                      "        pm.expect(requestBody['request-channel']).to.eql(20);",
+                      "        const name = pm.info.requestName || '';",
+                      "        if (name.startsWith('MA |')) {",
+                      "            pm.expect(requestBody['request-sub-channel']).to.eql(8);",
+                      "        } else if (name.startsWith('PS |')) {",
+                      "            pm.expect(requestBody['request-sub-channel']).to.eql(9);",
+                      "        }",
+                      "    });",
+                      "",
+                      "    pm.test('Transaction context is successful', function () {",
+                      "        pm.expect(json['transaction-context'].code).to.eql('10002');",
+                      "        pm.expect(json['transaction-context']['code-description']).to.eql('Operación exitosa.');",
+                      "        pm.expect(json['transaction-context']['time-stamp']).to.be.a('string').and.not.empty;",
+                      "    });",
+                      "}"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "PS - Subcanal 9",
+              "description": "PS | request-channel 20 | request-sub-channel 9. La carpeta hereda data dinámica y assertions comunes estables para Newman.",
+              "item": [
+                {
+                  "name": "PS | CA pesos >=2 - Cliente adulto",
+                  "event": [
+                    {
+                      "listen": "test",
+                      "script": {
+                        "type": "text/javascript",
+                        "exec": [
+                          "// ================================================================",
+                          "// ASSERTIONS ESPECÍFICAS - R02",
+                          "// ================================================================",
+                          "",
+                          "if (pm.response.code === 200) {",
+                          "    const json = pm.response.json();",
+                          "    const requestBody = JSON.parse(pm.request.body.raw || '{}');",
+                          "",
+                          "    pm.test('Expected rejection code is 2', function () {",
+                          "        const reasons = json['rejection-reasons'] || [];",
+                          "        pm.expect(String(reasons[0]?.code)).to.eql('2');",
+                          "    });",
+                          "",
+                          "    pm.test('Expected rejection description is correct', function () {",
+                          "        const reasons = json['rejection-reasons'] || [];",
+                          "        pm.expect(reasons[0]?.description).to.eql('No cumple requisitos de Prefiltro');",
+                          "    });",
+                          "",
+                          "    pm.test('Savings totals correspond to CA pesos rejection model', function () {",
+                          "        pm.expect(json.party.account['total-savings-ars']).to.eql(2);",
+                          "        pm.expect(json.party.account['total-savings-usd']).to.eql(1);",
+                          "    });",
+                          "}"
+                        ]
+                      }
+                    }
+                  ],
+                  "request": {
+                    "auth": {
+                      "type": "bearer",
+                      "bearer": [
+                        {
+                          "key": "token",
+                          "value": "{{AccessToken}}",
+                          "type": "string"
+                        }
+                      ]
+                    },
+                    "method": "POST",
+                    "header": [
+                      {
+                        "key": "Accept",
+                        "value": "application/json",
+                        "type": "text"
+                      },
+                      {
+                        "key": "Content-Type",
+                        "value": "application/json",
+                        "type": "text"
+                      },
+                      {
+                        "key": "x-request-id",
+                        "value": "{{$randomUUID}}",
+                        "type": "text"
+                      },
+                      {
+                        "key": "x-customer-id",
+                        "value": "{{xCustomerId}}",
+                        "type": "text"
+                      },
+                      {
+                        "key": "Host",
+                        "value": "{{headerHost}}",
+                        "type": "text"
+                      }
+                    ],
+                    "body": {
+                      "mode": "raw",
+                      "raw": "{\n    \"request-channel\": 20,\n    \"request-sub-channel\": 9,\n    \"utm-tracking\": {\n        \"source\": \"web\",\n        \"medium\": \"landing\",\n        \"campaign\": \"youth\",\n        \"content\": \"placeholder\"\n    },\n    \"references\": null,\n    \"party\": {\n        \"taxpayer-number\": \"20113669714\",\n        \"birth-date\": \"2000-07-07\",\n        \"is-customer\": true,\n        \"is-digital-customer\": true,\n        \"bank-segment-code\": \"01\",\n        \"segment-code\": \"01\",\n        \"sub-segment-code\": \"02\",\n        \"total-account\": 5,\n        \"process-type\": \"ENLINEA\",\n        \"product\": {\n            \"category\": \"02\",\n            \"details\": [\n                {\n                    \"id\": \"4\",\n                    \"description\": \"CUENTA DE AHORROS\",\n                    \"currency-id\": 2,\n                    \"account\": {\n                        \"holder-type\": \"T\",\n                        \"category\": \"SA\"\n                    },\n                    \"status-code\": \"A\",\n                    \"product-bundle-id\": 0\n                },\n                {\n                    \"id\": \"4\",\n                    \"description\": \"CUENTA DE AHORROS\",\n                    \"currency-id\": 80,\n                    \"account\": {\n                        \"holder-type\": \"T\",\n                        \"category\": \"SA\"\n                    },\n                    \"status-code\": \"A\",\n                    \"product-bundle-id\": 0\n                },\n                {\n                    \"id\": \"4\",\n                    \"description\": \"CUENTA DE AHORROS\",\n                    \"currency-id\": 80,\n                    \"account\": {\n                        \"holder-type\": \"T\",\n                        \"category\": \"KME\"\n                    },\n                    \"status-code\": \"A\",\n                    \"product-bundle-id\": 0\n                },\n                {\n                    \"id\": \"16\",\n                    \"description\": \"ATM - ADMINISTRACION TARJETAS DE DEBITO\",\n                    \"currency-id\": null,\n                    \"account\": {\n                        \"holder-type\": null,\n                        \"category\": null\n                    },\n                    \"status-code\": \"A\",\n                    \"product-bundle-id\": null\n                }\n            ]\n        }\n    }\n}",
+                      "options": {
+                        "raw": {
+                          "language": "json"
+                        }
+                      }
+                    },
+                    "url": {
+                      "raw": "{{baseURL}}/v1/fp/offer-rules/eligibility-evaluations",
+                      "host": [
+                        "{{baseURL}}"
+                      ],
+                      "path": [
+                        "v1",
+                        "fp",
+                        "offer-rules",
+                        "eligibility-evaluations"
+                      ]
+                    },
+                    "description": "Decision Model: R02 | Prioridad: P0 | Canal: PS\nES CLIENTE=SI | EDAD>=18 | CA PESOS>=2 | PREFILTRO APRUEBA=NO | Motivo esperado: No cumple requisitos de Prefiltro (code 2)"
+                  },
+                  "response": []
+                },
+                {
+                  "name": "PS | CACD >=2 - Cliente adolescente",
+                  "event": [
+                    {
+                      "listen": "test",
+                      "script": {
+                        "type": "text/javascript",
+                        "exec": [
+                          "// ================================================================",
+                          "// ASSERTIONS ESPECÍFICAS - R02",
+                          "// ================================================================",
+                          "",
+                          "if (pm.response.code === 200) {",
+                          "    const json = pm.response.json();",
+                          "    const requestBody = JSON.parse(pm.request.body.raw || '{}');",
+                          "",
+                          "    pm.test('Expected rejection code is 2', function () {",
+                          "        const reasons = json['rejection-reasons'] || [];",
+                          "        pm.expect(String(reasons[0]?.code)).to.eql('2');",
+                          "    });",
+                          "",
+                          "    pm.test('Expected rejection description is correct', function () {",
+                          "        const reasons = json['rejection-reasons'] || [];",
+                          "        pm.expect(reasons[0]?.description).to.eql('No cumple requisitos de Prefiltro');",
+                          "    });",
+                          "",
+                          "    pm.test('Savings totals correspond to adolescent CA USD rejection model', function () {",
+                          "        pm.expect(json.party.account['total-savings-ars']).to.eql(1);",
+                          "        pm.expect(json.party.account['total-savings-usd']).to.eql(2);",
+                          "        pm.expect(json.party['has-bundle']).to.be.false;",
+                          "        pm.expect(json.party['has-credit-card']).to.be.false;",
+                          "    });",
+                          "}"
+                        ]
+                      }
+                    }
+                  ],
+                  "request": {
+                    "auth": {
+                      "type": "bearer",
+                      "bearer": [
+                        {
+                          "key": "token",
+                          "value": "{{AccessToken}}",
+                          "type": "string"
+                        }
+                      ]
+                    },
+                    "method": "POST",
+                    "header": [
+                      {
+                        "key": "Accept",
+                        "value": "application/json",
+                        "type": "text"
+                      },
+                      {
+                        "key": "Content-Type",
+                        "value": "application/json",
+                        "type": "text"
+                      },
+                      {
+                        "key": "x-request-id",
+                        "value": "{{$randomUUID}}",
+                        "type": "text"
+                      },
+                      {
+                        "key": "x-customer-id",
+                        "value": "{{xCustomerId}}",
+                        "type": "text"
+                      },
+                      {
+                        "key": "Host",
+                        "value": "{{headerHost}}",
+                        "type": "text"
+                      }
+                    ],
+                    "body": {
+                      "mode": "raw",
+                      "raw": "{\n    \"request-channel\": 20,\n    \"request-sub-channel\": 9,\n    \"utm-tracking\": {\n        \"source\": \"web\",\n        \"medium\": \"landing\",\n        \"campaign\": \"youth\",\n        \"content\": \"placeholder\"\n    },\n    \"references\": null,\n    \"party\": {\n        \"taxpayer-number\": \"20113669714\",\n        \"birth-date\": \"2011-07-07\",\n        \"is-customer\": true,\n        \"is-digital-customer\": true,\n        \"bank-segment-code\": \"01\",\n        \"segment-code\": \"01\",\n        \"sub-segment-code\": \"02\",\n        \"total-account\": 5,\n        \"process-type\": \"ENLINEA\",\n        \"product\": {\n            \"category\": \"02\",\n            \"details\": [\n                {\n                    \"id\": \"4\",\n                    \"description\": \"CUENTA DE AHORROS\",\n                    \"currency-id\": 2,\n                    \"account\": {\n                        \"holder-type\": \"T\",\n                        \"category\": \"CGD\"\n                    },\n                    \"status-code\": \"A\",\n                    \"product-bundle-id\": 0\n                },\n                {\n                    \"id\": \"4\",\n                    \"description\": \"CUENTA DE AHORROS\",\n                    \"currency-id\": 2,\n                    \"account\": {\n                        \"holder-type\": \"T\",\n                        \"category\": \"CGD\"\n                    },\n                    \"status-code\": \"A\",\n                    \"product-bundle-id\": 0\n                },\n                {\n                    \"id\": \"4\",\n                    \"description\": \"CUENTA DE AHORROS\",\n                    \"currency-id\": 80,\n                    \"account\": {\n                        \"holder-type\": \"T\",\n                        \"category\": \"KME\"\n                    },\n                    \"status-code\": \"A\",\n                    \"product-bundle-id\": 0\n                },\n                {\n                    \"id\": \"16\",\n                    \"description\": \"ATM - ADMINISTRACION TARJETAS DE DEBITO\",\n                    \"currency-id\": null,\n                    \"account\": {\n                        \"holder-type\": null,\n                        \"category\": null\n                    },\n                    \"status-code\": \"A\",\n                    \"product-bundle-id\": null\n                }\n            ]\n        }\n    }\n}",
+                      "options": {
+                        "raw": {
+                          "language": "json"
+                        }
+                      }
+                    },
+                    "url": {
+                      "raw": "{{baseURL}}/v1/fp/offer-rules/eligibility-evaluations",
+                      "host": [
+                        "{{baseURL}}"
+                      ],
+                      "path": [
+                        "v1",
+                        "fp",
+                        "offer-rules",
+                        "eligibility-evaluations"
+                      ]
+                    },
+                    "description": "Decision Model: R02 | Prioridad: P0 | Canal: PS\nES CLIENTE=SI | EDAD 13-17 | CA USD>=2 (CACD) | PREFILTRO APRUEBA=NO | Motivo esperado: No cumple requisitos de Prefiltro (code 2)"
+                  },
+                  "response": []
+                },
+                {
+                  "name": "PS | CACD >=3 - Cliente adulto",
+                  "event": [
+                    {
+                      "listen": "test",
+                      "script": {
+                        "type": "text/javascript",
+                        "exec": [
+                          "// ================================================================",
+                          "// ASSERTIONS ESPECÍFICAS - R02",
+                          "// ================================================================",
+                          "",
+                          "if (pm.response.code === 200) {",
+                          "    const json = pm.response.json();",
+                          "    const requestBody = JSON.parse(pm.request.body.raw || '{}');",
+                          "",
+                          "    pm.test('Expected rejection code is 2', function () {",
+                          "        const reasons = json['rejection-reasons'] || [];",
+                          "        pm.expect(String(reasons[0]?.code)).to.eql('2');",
+                          "    });",
+                          "",
+                          "    pm.test('Expected rejection description is correct', function () {",
+                          "        const reasons = json['rejection-reasons'] || [];",
+                          "        pm.expect(reasons[0]?.description).to.eql('No cumple requisitos de Prefiltro');",
+                          "    });",
+                          "",
+                          "    pm.test('Savings totals correspond to adult CA USD rejection model', function () {",
+                          "        pm.expect(json.party.account['total-savings-ars']).to.eql(1);",
+                          "        pm.expect(json.party.account['total-savings-usd']).to.eql(3);",
+                          "        pm.expect(json.party['has-bundle']).to.be.false;",
+                          "        pm.expect(json.party['has-credit-card']).to.be.false;",
+                          "    });",
+                          "}"
+                        ]
+                      }
+                    }
+                  ],
+                  "request": {
+                    "auth": {
+                      "type": "bearer",
+                      "bearer": [
+                        {
+                          "key": "token",
+                          "value": "{{AccessToken}}",
+                          "type": "string"
+                        }
+                      ]
+                    },
+                    "method": "POST",
+                    "header": [
+                      {
+                        "key": "Accept",
+                        "value": "application/json",
+                        "type": "text"
+                      },
+                      {
+                        "key": "Content-Type",
+                        "value": "application/json",
+                        "type": "text"
+                      },
+                      {
+                        "key": "x-request-id",
+                        "value": "{{$randomUUID}}",
+                        "type": "text"
+                      },
+                      {
+                        "key": "x-customer-id",
+                        "value": "{{xCustomerId}}",
+                        "type": "text"
+                      },
+                      {
+                        "key": "Host",
+                        "value": "{{headerHost}}",
+                        "type": "text"
+                      }
+                    ],
+                    "body": {
+                      "mode": "raw",
+                      "raw": "{\n    \"request-channel\": 20,\n    \"request-sub-channel\": 9,\n    \"utm-tracking\": {\n        \"source\": \"web\",\n        \"medium\": \"landing\",\n        \"campaign\": \"youth\",\n        \"content\": \"placeholder\"\n    },\n    \"references\": null,\n    \"party\": {\n        \"taxpayer-number\": \"20113669714\",\n        \"birth-date\": \"2000-07-07\",\n        \"is-customer\": true,\n        \"is-digital-customer\": true,\n        \"bank-segment-code\": \"01\",\n        \"segment-code\": \"01\",\n        \"sub-segment-code\": \"02\",\n        \"total-account\": 5,\n        \"process-type\": \"ENLINEA\",\n        \"product\": {\n            \"category\": \"02\",\n            \"details\": [\n                {\n                    \"id\": \"4\",\n                    \"description\": \"CUENTA DE AHORROS\",\n                    \"currency-id\": 2,\n                    \"account\": {\n                        \"holder-type\": \"T\",\n                        \"category\": \"CGD\"\n                    },\n                    \"status-code\": \"A\",\n                    \"product-bundle-id\": 0\n                },\n                {\n                    \"id\": \"4\",\n                    \"description\": \"CUENTA DE AHORROS\",\n                    \"currency-id\": 2,\n                    \"account\": {\n                        \"holder-type\": \"T\",\n                        \"category\": \"CGD\"\n                    },\n                    \"status-code\": \"A\",\n                    \"product-bundle-id\": 0\n                },\n                {\n                    \"id\": \"4\",\n                    \"description\": \"CUENTA DE AHORROS\",\n                    \"currency-id\": 2,\n                    \"account\": {\n                        \"holder-type\": \"T\",\n                        \"category\": \"CGD\"\n                    },\n                    \"status-code\": \"A\",\n                    \"product-bundle-id\": 0\n                },\n                {\n                    \"id\": \"4\",\n                    \"description\": \"CUENTA DE AHORROS\",\n                    \"currency-id\": 80,\n                    \"account\": {\n                        \"holder-type\": \"T\",\n                        \"category\": \"KME\"\n                    },\n                    \"status-code\": \"A\",\n                    \"product-bundle-id\": 0\n                },\n                {\n                    \"id\": \"16\",\n                    \"description\": \"ATM - ADMINISTRACION TARJETAS DE DEBITO\",\n                    \"currency-id\": null,\n                    \"account\": {\n                        \"holder-type\": null,\n                        \"category\": null\n                    },\n                    \"status-code\": \"A\",\n                    \"product-bundle-id\": null\n                }\n            ]\n        }\n    }\n}",
+                      "options": {
+                        "raw": {
+                          "language": "json"
+                        }
+                      }
+                    },
+                    "url": {
+                      "raw": "{{baseURL}}/v1/fp/offer-rules/eligibility-evaluations",
+                      "host": [
+                        "{{baseURL}}"
+                      ],
+                      "path": [
+                        "v1",
+                        "fp",
+                        "offer-rules",
+                        "eligibility-evaluations"
+                      ]
+                    },
+                    "description": "Decision Model: R02 | Prioridad: P0 | Canal: PS\nES CLIENTE=SI | EDAD>=18 | CA USD>=3 (CACD) | PREFILTRO APRUEBA=NO | Motivo esperado: No cumple requisitos de Prefiltro (code 2)"
+                  },
+                  "response": []
+                }
+              ],
+              "event": [
+                {
+                  "listen": "prerequest",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "// 1. Genera edad aleatoria según la banda del caso (nombre del request)",
+                      "const name = pm.info.requestName || '';",
+                      "let minAge, maxAge;",
+                      "",
+                      "if (name.includes('<=12')) {",
+                      "    minAge = 2;  // Rango seguro (evita 0 o 1)",
+                      "    maxAge = 11; // Evita el límite exacto de 12",
+                      "} else if (name.toLowerCase().includes('adolescente')) {",
+                      "    minAge = 14; // Rango seguro para adolescentes (14 a 17)",
+                      "    maxAge = 17;",
+                      "} else if (name.toLowerCase().includes('adulto')) {",
+                      "    minAge = 20; // Rango seguro para adultos",
+                      "    maxAge = 60;",
+                      "}",
+                      "",
+                      "if (minAge !== undefined && pm.request.body && pm.request.body.raw) {",
+                      "    const expectedAge = Math.floor(Math.random() * (maxAge - minAge + 1)) + minAge;",
+                      "    ",
+                      "    // Año de nacimiento dinámico (fijado al 1 de enero para evitar desfasajes UTC)",
+                      "    const currentYear = new Date().getFullYear();",
+                      "    const birthYear = currentYear - expectedAge;",
+                      "    const birthDateStr = `${birthYear}-01-01`;",
+                      "",
+                      "    pm.variables.set('expectedAge', expectedAge);",
+                      "",
+                      "    const body = JSON.parse(pm.request.body.raw);",
+                      "    body.party['birth-date'] = birthDateStr;",
+                      "",
+                      "    // 2. Dinamizar cantidad de CBU / CVU en los casos que prueban la regla \"CBU/CVU >= 21\"",
+                      "    if (name.toUpperCase().includes('CBU/CVU')) {",
+                      "        // Genera un número aleatorio entre 21 y 99",
+                      "        const randomTotalAccounts = Math.floor(Math.random() * (99 - 21 + 1)) + 21;",
+                      "        body.party['total-account'] = randomTotalAccounts;",
+                      "        pm.variables.set('expectedTotalAccounts', randomTotalAccounts);",
+                      "        console.log(`[${name}] total-account aleatorio generado: ${randomTotalAccounts}`);",
+                      "    }",
+                      "",
+                      "    // Actualiza el body de la petición",
+                      "    pm.request.body.update(JSON.stringify(body, null, 4));",
+                      "",
+                      "    console.log(`[${name}] Edad aleatoria: ${expectedAge} | birth-date: ${birthDateStr}`);",
+                      "}"
+                    ]
+                  }
+                },
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "// ================================================================",
+                      "// ASSERTIONS COMUNES - P0 RECHAZOS PREFILTRO",
+                      "// Technical contract + common business invariants.",
+                      "// ================================================================",
+                      "",
+                      "pm.test('HTTP status is 200', function () {",
+                      "    pm.response.to.have.status(200);",
+                      "});",
+                      "",
+                      "pm.test('Response Content-Type is JSON', function () {",
+                      "    pm.expect(pm.response.headers.get('Content-Type') || '').to.include('application/json');",
+                      "});",
+                      "",
+                      "if (pm.response.code === 200) {",
+                      "    const json = pm.response.json();",
+                      "    const requestBody = JSON.parse(pm.request.body.raw || '{}');",
+                      "    const expectedAge = Number(pm.variables.get('expectedAge'));",
+                      "",
+                      "    pm.test('Response has the minimum expected contract', function () {",
+                      "        pm.expect(json).to.be.an('object');",
+                      "        pm.expect(json['commercial-offers']).to.be.an('array');",
+                      "        pm.expect(json['is-pre-screening']).to.be.a('boolean');",
+                      "        pm.expect(json.party).to.be.an('object');",
+                      "        pm.expect(json['rejection-reasons']).to.be.an('array');",
+                      "        pm.expect(json['status-code']).to.be.a('string');",
+                      "        pm.expect(json['transaction-context']).to.be.an('object');",
+                      "    });",
+                      "",
+                      "    pm.test('Prefiltro rejects and does not generate offers', function () {",
+                      "        pm.expect(json['status-code']).to.eql('REJECTED');",
+                      "        pm.expect(json['commercial-offers']).to.be.empty;",
+                      "        pm.expect(json['is-pre-screening']).to.be.false;",
+                      "        pm.expect(json.party['offer-segment']).to.be.null;",
+                      "    });",
+                      "",
+                      "    pm.test('Prefilter rejection description is consistent', function () {",
+                      "        pm.expect(json['pre-screening-description']).to.eql('Se genero uno o más rechazos.');",
+                      "    });",
+                      "",
+                      "    pm.test('Exactly one rejection reason is returned for this isolated rule scenario', function () {",
+                      "        pm.expect(json['rejection-reasons']).to.have.lengthOf(1);",
+                      "    });",
+                      "",
+                      "    pm.test('Party identity and customer flag correspond to the request', function () {",
+                      "        pm.expect(json.party['taxpayer-number']).to.eql(requestBody.party['taxpayer-number']);",
+                      "        pm.expect(json.party['is-customer']).to.eql(requestBody.party['is-customer']);",
+                      "    });",
+                      "",
+                      "    pm.test('Returned age matches generated test data and expected partition', function () {",
+                      "        pm.expect(json.party.age).to.eql(expectedAge);",
+                      "        const name = (pm.info.requestName || '').toLowerCase();",
+                      "        if (name.includes('<=12')) {",
+                      "            pm.expect(json.party.age).to.be.at.most(12);",
+                      "        } else if (name.includes('adolescente')) {",
+                      "            pm.expect(json.party.age).to.be.within(13, 17);",
+                      "        } else if (name.includes('adulto')) {",
+                      "            pm.expect(json.party.age).to.be.at.least(18);",
+                      "        }",
+                      "    });",
+                      "",
+                      "    pm.test('Request belongs to expected ONB channel/subchannel model', function () {",
+                      "        pm.expect(requestBody['request-channel']).to.eql(20);",
+                      "        const name = pm.info.requestName || '';",
+                      "        if (name.startsWith('MA |')) {",
+                      "            pm.expect(requestBody['request-sub-channel']).to.eql(8);",
+                      "        } else if (name.startsWith('PS |')) {",
+                      "            pm.expect(requestBody['request-sub-channel']).to.eql(9);",
+                      "        }",
+                      "    });",
+                      "",
+                      "    pm.test('Transaction context is successful', function () {",
+                      "        pm.expect(json['transaction-context'].code).to.eql('10002');",
+                      "        pm.expect(json['transaction-context']['code-description']).to.eql('Operación exitosa.');",
+                      "        pm.expect(json['transaction-context']['time-stamp']).to.be.a('string').and.not.empty;",
+                      "    });",
+                      "}"
+                    ]
+                  }
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "name": "R03 - Límite CBU/CVU",
+          "description": "Decision Model R03 | Prioridad P0\nRegla: total-account >20 debe provocar rechazo de Prefiltro.\nExpected: REJECTED, commercial-offers vacío, rejection code 3.\nCobertura actual: cliente/no cliente, adolescente/adulto, MA/PS.\nLa data usa total-account aleatorio entre 21 y 99; el borde 20/21 queda para Boundary Suite.",
+          "item": [
+            {
+              "name": "MA - Subcanal 8",
+              "description": "MA | request-channel 20 | request-sub-channel 8. La carpeta hereda data dinámica y assertions comunes estables para Newman.",
+              "item": [
+                {
+                  "name": "MA | CBU/CVU >=21 - No cliente adolescente",
+                  "event": [
+                    {
+                      "listen": "test",
+                      "script": {
+                        "type": "text/javascript",
+                        "exec": [
+                          "// ================================================================",
+                          "// ASSERTIONS ESPECÍFICAS - R03",
+                          "// ================================================================",
+                          "",
+                          "if (pm.response.code === 200) {",
+                          "    const json = pm.response.json();",
+                          "    const requestBody = JSON.parse(pm.request.body.raw || '{}');",
+                          "",
+                          "    pm.test('Expected rejection code is 3', function () {",
+                          "        const reasons = json['rejection-reasons'] || [];",
+                          "        pm.expect(String(reasons[0]?.code)).to.eql('3');",
+                          "    });",
+                          "",
+                          "    pm.test('Expected rejection description is correct', function () {",
+                          "        const reasons = json['rejection-reasons'] || [];",
+                          "        pm.expect(reasons[0]?.description).to.eql('Supera cantidad de cbu/cvu permitidos');",
+                          "    });",
+                          "",
+                          "    pm.test('CBU/CVU input remains inside rejection partition', function () {",
+                          "        const expectedTotalAccounts = Number(pm.variables.get('expectedTotalAccounts'));",
+                          "        pm.expect(requestBody.party['total-account']).to.eql(expectedTotalAccounts);",
+                          "        pm.expect(requestBody.party['total-account']).to.be.at.least(21);",
+                          "    });",
+                          "}"
+                        ]
+                      }
+                    }
+                  ],
+                  "request": {
+                    "auth": {
+                      "type": "bearer",
+                      "bearer": [
+                        {
+                          "key": "token",
+                          "value": "{{AccessToken}}",
+                          "type": "string"
+                        }
+                      ]
+                    },
+                    "method": "POST",
+                    "header": [
+                      {
+                        "key": "Accept",
+                        "value": "application/json",
+                        "type": "text"
+                      },
+                      {
+                        "key": "Content-Type",
+                        "value": "application/json",
+                        "type": "text"
+                      },
+                      {
+                        "key": "x-request-id",
+                        "value": "{{$randomUUID}}",
+                        "type": "text"
+                      },
+                      {
+                        "key": "x-customer-id",
+                        "value": "{{xCustomerId}}",
+                        "type": "text"
+                      },
+                      {
+                        "key": "Host",
+                        "value": "{{headerHost}}",
+                        "type": "text"
+                      }
+                    ],
+                    "body": {
+                      "mode": "raw",
+                      "raw": "{\n    \"request-channel\": 20,\n    \"request-sub-channel\": 8,\n    \"utm-tracking\": {\n        \"source\": \"web\",\n        \"medium\": \"landing\",\n        \"campaign\": \"youth\",\n        \"content\": \"placeholder\"\n    },\n    \"references\": null,\n    \"party\": {\n        \"taxpayer-number\": \"20062484838\",\n        \"birth-date\": \"2011-07-07\",\n        \"is-customer\": false,\n        \"is-digital-customer\": false,\n        \"bank-segment-code\": null,\n        \"segment-code\": null,\n        \"sub-segment-code\": null,\n        \"total-account\": 21,\n        \"process-type\": \"ENLINEA\",\n        \"product\": {\n            \"category\": null,\n            \"details\": []\n        }\n    }\n}",
+                      "options": {
+                        "raw": {
+                          "language": "json"
+                        }
+                      }
+                    },
+                    "url": {
+                      "raw": "{{baseURL}}/v1/fp/offer-rules/eligibility-evaluations",
+                      "host": [
+                        "{{baseURL}}"
+                      ],
+                      "path": [
+                        "v1",
+                        "fp",
+                        "offer-rules",
+                        "eligibility-evaluations"
+                      ]
+                    },
+                    "description": "Decision Model: R03 | Prioridad: P0 | Canal: MA\nES CLIENTE=NO | EDAD 13-17 | CBU+CVU>=21 | PREFILTRO APRUEBA=NO | Motivo esperado: Supera cantidad de cbu/cvu permitidos (code 3)"
+                  },
+                  "response": []
+                },
+                {
+                  "name": "MA | CBU/CVU >=21 - No cliente adulto",
+                  "event": [
+                    {
+                      "listen": "test",
+                      "script": {
+                        "type": "text/javascript",
+                        "exec": [
+                          "// ================================================================",
+                          "// ASSERTIONS ESPECÍFICAS - R03",
+                          "// ================================================================",
+                          "",
+                          "if (pm.response.code === 200) {",
+                          "    const json = pm.response.json();",
+                          "    const requestBody = JSON.parse(pm.request.body.raw || '{}');",
+                          "",
+                          "    pm.test('Expected rejection code is 3', function () {",
+                          "        const reasons = json['rejection-reasons'] || [];",
+                          "        pm.expect(String(reasons[0]?.code)).to.eql('3');",
+                          "    });",
+                          "",
+                          "    pm.test('Expected rejection description is correct', function () {",
+                          "        const reasons = json['rejection-reasons'] || [];",
+                          "        pm.expect(reasons[0]?.description).to.eql('Supera cantidad de cbu/cvu permitidos');",
+                          "    });",
+                          "",
+                          "    pm.test('CBU/CVU input remains inside rejection partition', function () {",
+                          "        const expectedTotalAccounts = Number(pm.variables.get('expectedTotalAccounts'));",
+                          "        pm.expect(requestBody.party['total-account']).to.eql(expectedTotalAccounts);",
+                          "        pm.expect(requestBody.party['total-account']).to.be.at.least(21);",
+                          "    });",
+                          "}"
+                        ]
+                      }
+                    }
+                  ],
+                  "request": {
+                    "auth": {
+                      "type": "bearer",
+                      "bearer": [
+                        {
+                          "key": "token",
+                          "value": "{{AccessToken}}",
+                          "type": "string"
+                        }
+                      ]
+                    },
+                    "method": "POST",
+                    "header": [
+                      {
+                        "key": "Accept",
+                        "value": "application/json",
+                        "type": "text"
+                      },
+                      {
+                        "key": "Content-Type",
+                        "value": "application/json",
+                        "type": "text"
+                      },
+                      {
+                        "key": "x-request-id",
+                        "value": "{{$randomUUID}}",
+                        "type": "text"
+                      },
+                      {
+                        "key": "x-customer-id",
+                        "value": "{{xCustomerId}}",
+                        "type": "text"
+                      },
+                      {
+                        "key": "Host",
+                        "value": "{{headerHost}}",
+                        "type": "text"
+                      }
+                    ],
+                    "body": {
+                      "mode": "raw",
+                      "raw": "{\n    \"request-channel\": 20,\n    \"request-sub-channel\": 8,\n    \"utm-tracking\": {\n        \"source\": \"web\",\n        \"medium\": \"landing\",\n        \"campaign\": \"youth\",\n        \"content\": \"placeholder\"\n    },\n    \"references\": null,\n    \"party\": {\n        \"taxpayer-number\": \"20062484838\",\n        \"birth-date\": \"2000-07-07\",\n        \"is-customer\": false,\n        \"is-digital-customer\": false,\n        \"bank-segment-code\": null,\n        \"segment-code\": null,\n        \"sub-segment-code\": null,\n        \"total-account\": 21,\n        \"process-type\": \"ENLINEA\",\n        \"product\": {\n            \"category\": null,\n            \"details\": []\n        }\n    }\n}",
+                      "options": {
+                        "raw": {
+                          "language": "json"
+                        }
+                      }
+                    },
+                    "url": {
+                      "raw": "{{baseURL}}/v1/fp/offer-rules/eligibility-evaluations",
+                      "host": [
+                        "{{baseURL}}"
+                      ],
+                      "path": [
+                        "v1",
+                        "fp",
+                        "offer-rules",
+                        "eligibility-evaluations"
+                      ]
+                    },
+                    "description": "Decision Model: R03 | Prioridad: P0 | Canal: MA\nES CLIENTE=NO | EDAD>=18 | CBU+CVU>=21 | PREFILTRO APRUEBA=NO | Motivo esperado: Supera cantidad de cbu/cvu permitidos (code 3)"
+                  },
+                  "response": []
+                },
+                {
+                  "name": "MA | CBU/CVU >=21 - Cliente adolescente",
+                  "event": [
+                    {
+                      "listen": "test",
+                      "script": {
+                        "type": "text/javascript",
+                        "exec": [
+                          "// ================================================================",
+                          "// ASSERTIONS ESPECÍFICAS - R03",
+                          "// ================================================================",
+                          "",
+                          "if (pm.response.code === 200) {",
+                          "    const json = pm.response.json();",
+                          "    const requestBody = JSON.parse(pm.request.body.raw || '{}');",
+                          "",
+                          "    pm.test('Expected rejection code is 3', function () {",
+                          "        const reasons = json['rejection-reasons'] || [];",
+                          "        pm.expect(String(reasons[0]?.code)).to.eql('3');",
+                          "    });",
+                          "",
+                          "    pm.test('Expected rejection description is correct', function () {",
+                          "        const reasons = json['rejection-reasons'] || [];",
+                          "        pm.expect(reasons[0]?.description).to.eql('Supera cantidad de cbu/cvu permitidos');",
+                          "    });",
+                          "",
+                          "    pm.test('CBU/CVU input remains inside rejection partition', function () {",
+                          "        const expectedTotalAccounts = Number(pm.variables.get('expectedTotalAccounts'));",
+                          "        pm.expect(requestBody.party['total-account']).to.eql(expectedTotalAccounts);",
+                          "        pm.expect(requestBody.party['total-account']).to.be.at.least(21);",
+                          "    });",
+                          "}"
+                        ]
+                      }
+                    }
+                  ],
+                  "request": {
+                    "auth": {
+                      "type": "bearer",
+                      "bearer": [
+                        {
+                          "key": "token",
+                          "value": "{{AccessToken}}",
+                          "type": "string"
+                        }
+                      ]
+                    },
+                    "method": "POST",
+                    "header": [
+                      {
+                        "key": "Accept",
+                        "value": "application/json",
+                        "type": "text"
+                      },
+                      {
+                        "key": "Content-Type",
+                        "value": "application/json",
+                        "type": "text"
+                      },
+                      {
+                        "key": "x-request-id",
+                        "value": "{{$randomUUID}}",
+                        "type": "text"
+                      },
+                      {
+                        "key": "x-customer-id",
+                        "value": "{{xCustomerId}}",
+                        "type": "text"
+                      },
+                      {
+                        "key": "Host",
+                        "value": "{{headerHost}}",
+                        "type": "text"
+                      }
+                    ],
+                    "body": {
+                      "mode": "raw",
+                      "raw": "{\n    \"request-channel\": 20,\n    \"request-sub-channel\": 8,\n    \"utm-tracking\": {\n        \"source\": \"web\",\n        \"medium\": \"landing\",\n        \"campaign\": \"youth\",\n        \"content\": \"placeholder\"\n    },\n    \"references\": null,\n    \"party\": {\n        \"taxpayer-number\": \"20113669714\",\n        \"birth-date\": \"2010-07-07\",\n        \"is-customer\": true,\n        \"is-digital-customer\": true,\n        \"bank-segment-code\": \"01\",\n        \"segment-code\": \"01\",\n        \"sub-segment-code\": \"02\",\n        \"total-account\": 21,\n        \"process-type\": \"ENLINEA\",\n        \"product\": {\n            \"category\": \"02\",\n            \"details\": [\n                {\n                    \"id\": \"3\",\n                    \"description\": \"CUENTA CORRIENTE\",\n                    \"currency-id\": 80,\n                    \"account\": {\n                        \"holder-type\": \"T\",\n                        \"category\": \"MED\"\n                    },\n                    \"status-code\": \"A\",\n                    \"product-bundle-id\": 0\n                },\n                {\n                    \"id\": \"4\",\n                    \"description\": \"CUENTA DE AHORROS\",\n                    \"currency-id\": 2,\n                    \"account\": {\n                        \"holder-type\": \"T\",\n                        \"category\": \"SA\"\n                    },\n                    \"status-code\": \"A\",\n                    \"product-bundle-id\": 0\n                },\n                {\n                    \"id\": \"4\",\n                    \"description\": \"CUENTA DE AHORROS\",\n                    \"currency-id\": 2,\n                    \"account\": {\n                        \"holder-type\": \"T\",\n                        \"category\": \"ALT\"\n                    },\n                    \"status-code\": \"I\",\n                    \"product-bundle-id\": 0\n                },\n                {\n                    \"id\": \"4\",\n                    \"description\": \"CUENTA DE AHORROS\",\n                    \"currency-id\": 80,\n                    \"account\": {\n                        \"holder-type\": \"T\",\n                        \"category\": \"KME\"\n                    },\n                    \"status-code\": \"A\",\n                    \"product-bundle-id\": 0\n                },\n                {\n                    \"id\": \"16\",\n                    \"description\": \"ATM - ADMINISTRACION TARJETAS DE DEBITO\",\n                    \"currency-id\": null,\n                    \"account\": {\n                        \"holder-type\": null,\n                        \"category\": null\n                    },\n                    \"status-code\": \"A\",\n                    \"product-bundle-id\": null\n                },\n                {\n                    \"id\": \"28\",\n                    \"description\": \"TARJETAS DE CREDITO\",\n                    \"currency-id\": null,\n                    \"account\": {\n                        \"holder-type\": null,\n                        \"category\": null\n                    },\n                    \"status-code\": \"A\",\n                    \"product-bundle-id\": null\n                }\n            ]\n        }\n    }\n}",
+                      "options": {
+                        "raw": {
+                          "language": "json"
+                        }
+                      }
+                    },
+                    "url": {
+                      "raw": "{{baseURL}}/v1/fp/offer-rules/eligibility-evaluations",
+                      "host": [
+                        "{{baseURL}}"
+                      ],
+                      "path": [
+                        "v1",
+                        "fp",
+                        "offer-rules",
+                        "eligibility-evaluations"
+                      ]
+                    },
+                    "description": "Decision Model: R03 | Prioridad: P0 | Canal: MA\nES CLIENTE=SI | EDAD 13-17 | CBU+CVU>=21 | PREFILTRO APRUEBA=NO | Motivo esperado: Supera cantidad de cbu/cvu permitidos (code 3)"
+                  },
+                  "response": []
+                },
+                {
+                  "name": "MA | CBU/CVU >=21 - Cliente adulto",
+                  "event": [
+                    {
+                      "listen": "test",
+                      "script": {
+                        "type": "text/javascript",
+                        "exec": [
+                          "// ================================================================",
+                          "// ASSERTIONS ESPECÍFICAS - R03",
+                          "// ================================================================",
+                          "",
+                          "if (pm.response.code === 200) {",
+                          "    const json = pm.response.json();",
+                          "    const requestBody = JSON.parse(pm.request.body.raw || '{}');",
+                          "",
+                          "    pm.test('Expected rejection code is 3', function () {",
+                          "        const reasons = json['rejection-reasons'] || [];",
+                          "        pm.expect(String(reasons[0]?.code)).to.eql('3');",
+                          "    });",
+                          "",
+                          "    pm.test('Expected rejection description is correct', function () {",
+                          "        const reasons = json['rejection-reasons'] || [];",
+                          "        pm.expect(reasons[0]?.description).to.eql('Supera cantidad de cbu/cvu permitidos');",
+                          "    });",
+                          "",
+                          "    pm.test('CBU/CVU input remains inside rejection partition', function () {",
+                          "        const expectedTotalAccounts = Number(pm.variables.get('expectedTotalAccounts'));",
+                          "        pm.expect(requestBody.party['total-account']).to.eql(expectedTotalAccounts);",
+                          "        pm.expect(requestBody.party['total-account']).to.be.at.least(21);",
+                          "    });",
+                          "}"
+                        ]
+                      }
+                    }
+                  ],
+                  "request": {
+                    "auth": {
+                      "type": "bearer",
+                      "bearer": [
+                        {
+                          "key": "token",
+                          "value": "{{AccessToken}}",
+                          "type": "string"
+                        }
+                      ]
+                    },
+                    "method": "POST",
+                    "header": [
+                      {
+                        "key": "Accept",
+                        "value": "application/json",
+                        "type": "text"
+                      },
+                      {
+                        "key": "Content-Type",
+                        "value": "application/json",
+                        "type": "text"
+                      },
+                      {
+                        "key": "x-request-id",
+                        "value": "{{$randomUUID}}",
+                        "type": "text"
+                      },
+                      {
+                        "key": "x-customer-id",
+                        "value": "{{xCustomerId}}",
+                        "type": "text"
+                      },
+                      {
+                        "key": "Host",
+                        "value": "{{headerHost}}",
+                        "type": "text"
+                      }
+                    ],
+                    "body": {
+                      "mode": "raw",
+                      "raw": "{\n    \"request-channel\": 20,\n    \"request-sub-channel\": 8,\n    \"utm-tracking\": {\n        \"source\": \"web\",\n        \"medium\": \"landing\",\n        \"campaign\": \"youth\",\n        \"content\": \"placeholder\"\n    },\n    \"references\": null,\n    \"party\": {\n        \"taxpayer-number\": \"20113669714\",\n        \"birth-date\": \"2000-07-07\",\n        \"is-customer\": true,\n        \"is-digital-customer\": true,\n        \"bank-segment-code\": \"01\",\n        \"segment-code\": \"01\",\n        \"sub-segment-code\": \"02\",\n        \"total-account\": 21,\n        \"process-type\": \"ENLINEA\",\n        \"product\": {\n            \"category\": \"02\",\n            \"details\": [\n                {\n                    \"id\": \"3\",\n                    \"description\": \"CUENTA CORRIENTE\",\n                    \"currency-id\": 80,\n                    \"account\": {\n                        \"holder-type\": \"T\",\n                        \"category\": \"MED\"\n                    },\n                    \"status-code\": \"A\",\n                    \"product-bundle-id\": 0\n                },\n                {\n                    \"id\": \"4\",\n                    \"description\": \"CUENTA DE AHORROS\",\n                    \"currency-id\": 2,\n                    \"account\": {\n                        \"holder-type\": \"T\",\n                        \"category\": \"SA\"\n                    },\n                    \"status-code\": \"A\",\n                    \"product-bundle-id\": 0\n                },\n                {\n                    \"id\": \"4\",\n                    \"description\": \"CUENTA DE AHORROS\",\n                    \"currency-id\": 2,\n                    \"account\": {\n                        \"holder-type\": \"T\",\n                        \"category\": \"ALT\"\n                    },\n                    \"status-code\": \"I\",\n                    \"product-bundle-id\": 0\n                },\n                {\n                    \"id\": \"4\",\n                    \"description\": \"CUENTA DE AHORROS\",\n                    \"currency-id\": 80,\n                    \"account\": {\n                        \"holder-type\": \"T\",\n                        \"category\": \"KME\"\n                    },\n                    \"status-code\": \"A\",\n                    \"product-bundle-id\": 0\n                },\n                {\n                    \"id\": \"16\",\n                    \"description\": \"ATM - ADMINISTRACION TARJETAS DE DEBITO\",\n                    \"currency-id\": null,\n                    \"account\": {\n                        \"holder-type\": null,\n                        \"category\": null\n                    },\n                    \"status-code\": \"A\",\n                    \"product-bundle-id\": null\n                },\n                {\n                    \"id\": \"28\",\n                    \"description\": \"TARJETAS DE CREDITO\",\n                    \"currency-id\": null,\n                    \"account\": {\n                        \"holder-type\": null,\n                        \"category\": null\n                    },\n                    \"status-code\": \"A\",\n                    \"product-bundle-id\": null\n                }\n            ]\n        }\n    }\n}",
+                      "options": {
+                        "raw": {
+                          "language": "json"
+                        }
+                      }
+                    },
+                    "url": {
+                      "raw": "{{baseURL}}/v1/fp/offer-rules/eligibility-evaluations",
+                      "host": [
+                        "{{baseURL}}"
+                      ],
+                      "path": [
+                        "v1",
+                        "fp",
+                        "offer-rules",
+                        "eligibility-evaluations"
+                      ]
+                    },
+                    "description": "Decision Model: R03 | Prioridad: P0 | Canal: MA\nES CLIENTE=SI | EDAD>=18 | CBU+CVU>=21 | PREFILTRO APRUEBA=NO | Motivo esperado: Supera cantidad de cbu/cvu permitidos (code 3)"
+                  },
+                  "response": []
+                }
+              ],
+              "event": [
+                {
+                  "listen": "prerequest",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "// 1. Genera edad aleatoria según la banda del caso (nombre del request)",
+                      "const name = pm.info.requestName || '';",
+                      "let minAge, maxAge;",
+                      "",
+                      "if (name.includes('<=12')) {",
+                      "    minAge = 2;  // Rango seguro (evita 0 o 1)",
+                      "    maxAge = 11; // Evita el límite exacto de 12",
+                      "} else if (name.toLowerCase().includes('adolescente')) {",
+                      "    minAge = 14; // Rango seguro para adolescentes (14 a 17)",
+                      "    maxAge = 17;",
+                      "} else if (name.toLowerCase().includes('adulto')) {",
+                      "    minAge = 20; // Rango seguro para adultos",
+                      "    maxAge = 60;",
+                      "}",
+                      "",
+                      "if (minAge !== undefined && pm.request.body && pm.request.body.raw) {",
+                      "    const expectedAge = Math.floor(Math.random() * (maxAge - minAge + 1)) + minAge;",
+                      "    ",
+                      "    // Año de nacimiento dinámico (fijado al 1 de enero para evitar desfasajes UTC)",
+                      "    const currentYear = new Date().getFullYear();",
+                      "    const birthYear = currentYear - expectedAge;",
+                      "    const birthDateStr = `${birthYear}-01-01`;",
+                      "",
+                      "    pm.variables.set('expectedAge', expectedAge);",
+                      "",
+                      "    const body = JSON.parse(pm.request.body.raw);",
+                      "    body.party['birth-date'] = birthDateStr;",
+                      "",
+                      "    // 2. Dinamizar cantidad de CBU / CVU en los casos que prueban la regla \"CBU/CVU >= 21\"",
+                      "    if (name.toUpperCase().includes('CBU/CVU')) {",
+                      "        // Genera un número aleatorio entre 21 y 99",
+                      "        const randomTotalAccounts = Math.floor(Math.random() * (99 - 21 + 1)) + 21;",
+                      "        body.party['total-account'] = randomTotalAccounts;",
+                      "        pm.variables.set('expectedTotalAccounts', randomTotalAccounts);",
+                      "        console.log(`[${name}] total-account aleatorio generado: ${randomTotalAccounts}`);",
+                      "    }",
+                      "",
+                      "    // Actualiza el body de la petición",
+                      "    pm.request.body.update(JSON.stringify(body, null, 4));",
+                      "",
+                      "    console.log(`[${name}] Edad aleatoria: ${expectedAge} | birth-date: ${birthDateStr}`);",
+                      "}"
+                    ]
+                  }
+                },
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "// ================================================================",
+                      "// ASSERTIONS COMUNES - P0 RECHAZOS PREFILTRO",
+                      "// Technical contract + common business invariants.",
+                      "// ================================================================",
+                      "",
+                      "pm.test('HTTP status is 200', function () {",
+                      "    pm.response.to.have.status(200);",
+                      "});",
+                      "",
+                      "pm.test('Response Content-Type is JSON', function () {",
+                      "    pm.expect(pm.response.headers.get('Content-Type') || '').to.include('application/json');",
+                      "});",
+                      "",
+                      "if (pm.response.code === 200) {",
+                      "    const json = pm.response.json();",
+                      "    const requestBody = JSON.parse(pm.request.body.raw || '{}');",
+                      "    const expectedAge = Number(pm.variables.get('expectedAge'));",
+                      "",
+                      "    pm.test('Response has the minimum expected contract', function () {",
+                      "        pm.expect(json).to.be.an('object');",
+                      "        pm.expect(json['commercial-offers']).to.be.an('array');",
+                      "        pm.expect(json['is-pre-screening']).to.be.a('boolean');",
+                      "        pm.expect(json.party).to.be.an('object');",
+                      "        pm.expect(json['rejection-reasons']).to.be.an('array');",
+                      "        pm.expect(json['status-code']).to.be.a('string');",
+                      "        pm.expect(json['transaction-context']).to.be.an('object');",
+                      "    });",
+                      "",
+                      "    pm.test('Prefiltro rejects and does not generate offers', function () {",
+                      "        pm.expect(json['status-code']).to.eql('REJECTED');",
+                      "        pm.expect(json['commercial-offers']).to.be.empty;",
+                      "        pm.expect(json['is-pre-screening']).to.be.false;",
+                      "        pm.expect(json.party['offer-segment']).to.be.null;",
+                      "    });",
+                      "",
+                      "    pm.test('Prefilter rejection description is consistent', function () {",
+                      "        pm.expect(json['pre-screening-description']).to.eql('Se genero uno o más rechazos.');",
+                      "    });",
+                      "",
+                      "    pm.test('Exactly one rejection reason is returned for this isolated rule scenario', function () {",
+                      "        pm.expect(json['rejection-reasons']).to.have.lengthOf(1);",
+                      "    });",
+                      "",
+                      "    pm.test('Party identity and customer flag correspond to the request', function () {",
+                      "        pm.expect(json.party['taxpayer-number']).to.eql(requestBody.party['taxpayer-number']);",
+                      "        pm.expect(json.party['is-customer']).to.eql(requestBody.party['is-customer']);",
+                      "    });",
+                      "",
+                      "    pm.test('Returned age matches generated test data and expected partition', function () {",
+                      "        pm.expect(json.party.age).to.eql(expectedAge);",
+                      "        const name = (pm.info.requestName || '').toLowerCase();",
+                      "        if (name.includes('<=12')) {",
+                      "            pm.expect(json.party.age).to.be.at.most(12);",
+                      "        } else if (name.includes('adolescente')) {",
+                      "            pm.expect(json.party.age).to.be.within(13, 17);",
+                      "        } else if (name.includes('adulto')) {",
+                      "            pm.expect(json.party.age).to.be.at.least(18);",
+                      "        }",
+                      "    });",
+                      "",
+                      "    pm.test('Request belongs to expected ONB channel/subchannel model', function () {",
+                      "        pm.expect(requestBody['request-channel']).to.eql(20);",
+                      "        const name = pm.info.requestName || '';",
+                      "        if (name.startsWith('MA |')) {",
+                      "            pm.expect(requestBody['request-sub-channel']).to.eql(8);",
+                      "        } else if (name.startsWith('PS |')) {",
+                      "            pm.expect(requestBody['request-sub-channel']).to.eql(9);",
+                      "        }",
+                      "    });",
+                      "",
+                      "    pm.test('Transaction context is successful', function () {",
+                      "        pm.expect(json['transaction-context'].code).to.eql('10002');",
+                      "        pm.expect(json['transaction-context']['code-description']).to.eql('Operación exitosa.');",
+                      "        pm.expect(json['transaction-context']['time-stamp']).to.be.a('string').and.not.empty;",
+                      "    });",
+                      "}"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "PS - Subcanal 9",
+              "description": "PS | request-channel 20 | request-sub-channel 9. La carpeta hereda data dinámica y assertions comunes estables para Newman.",
+              "item": [
+                {
+                  "name": "PS | CBU/CVU >=21 - No cliente adolescente",
+                  "event": [
+                    {
+                      "listen": "test",
+                      "script": {
+                        "type": "text/javascript",
+                        "exec": [
+                          "// ================================================================",
+                          "// ASSERTIONS ESPECÍFICAS - R03",
+                          "// ================================================================",
+                          "",
+                          "if (pm.response.code === 200) {",
+                          "    const json = pm.response.json();",
+                          "    const requestBody = JSON.parse(pm.request.body.raw || '{}');",
+                          "",
+                          "    pm.test('Expected rejection code is 3', function () {",
+                          "        const reasons = json['rejection-reasons'] || [];",
+                          "        pm.expect(String(reasons[0]?.code)).to.eql('3');",
+                          "    });",
+                          "",
+                          "    pm.test('Expected rejection description is correct', function () {",
+                          "        const reasons = json['rejection-reasons'] || [];",
+                          "        pm.expect(reasons[0]?.description).to.eql('Supera cantidad de cbu/cvu permitidos');",
+                          "    });",
+                          "",
+                          "    pm.test('CBU/CVU input remains inside rejection partition', function () {",
+                          "        const expectedTotalAccounts = Number(pm.variables.get('expectedTotalAccounts'));",
+                          "        pm.expect(requestBody.party['total-account']).to.eql(expectedTotalAccounts);",
+                          "        pm.expect(requestBody.party['total-account']).to.be.at.least(21);",
+                          "    });",
+                          "}"
+                        ]
+                      }
+                    }
+                  ],
+                  "request": {
+                    "auth": {
+                      "type": "bearer",
+                      "bearer": [
+                        {
+                          "key": "token",
+                          "value": "{{AccessToken}}",
+                          "type": "string"
+                        }
+                      ]
+                    },
+                    "method": "POST",
+                    "header": [
+                      {
+                        "key": "Accept",
+                        "value": "application/json",
+                        "type": "text"
+                      },
+                      {
+                        "key": "Content-Type",
+                        "value": "application/json",
+                        "type": "text"
+                      },
+                      {
+                        "key": "x-request-id",
+                        "value": "{{$randomUUID}}",
+                        "type": "text"
+                      },
+                      {
+                        "key": "x-customer-id",
+                        "value": "{{xCustomerId}}",
+                        "type": "text"
+                      },
+                      {
+                        "key": "Host",
+                        "value": "{{headerHost}}",
+                        "type": "text"
+                      }
+                    ],
+                    "body": {
+                      "mode": "raw",
+                      "raw": "{\n    \"request-channel\": 20,\n    \"request-sub-channel\": 9,\n    \"utm-tracking\": {\n        \"source\": \"web\",\n        \"medium\": \"landing\",\n        \"campaign\": \"youth\",\n        \"content\": \"placeholder\"\n    },\n    \"references\": null,\n    \"party\": {\n        \"taxpayer-number\": \"20062484838\",\n        \"birth-date\": \"2011-07-07\",\n        \"is-customer\": false,\n        \"is-digital-customer\": false,\n        \"bank-segment-code\": null,\n        \"segment-code\": null,\n        \"sub-segment-code\": null,\n        \"total-account\": 21,\n        \"process-type\": \"ENLINEA\",\n        \"product\": {\n            \"category\": null,\n            \"details\": []\n        }\n    }\n}",
+                      "options": {
+                        "raw": {
+                          "language": "json"
+                        }
+                      }
+                    },
+                    "url": {
+                      "raw": "{{baseURL}}/v1/fp/offer-rules/eligibility-evaluations",
+                      "host": [
+                        "{{baseURL}}"
+                      ],
+                      "path": [
+                        "v1",
+                        "fp",
+                        "offer-rules",
+                        "eligibility-evaluations"
+                      ]
+                    },
+                    "description": "Decision Model: R03 | Prioridad: P0 | Canal: PS\nES CLIENTE=NO | EDAD 13-17 | CBU+CVU>=21 | PREFILTRO APRUEBA=NO | Motivo esperado: Supera cantidad de cbu/cvu permitidos (code 3)"
+                  },
+                  "response": []
+                },
+                {
+                  "name": "PS | CBU/CVU >=21 - No cliente adulto",
+                  "event": [
+                    {
+                      "listen": "test",
+                      "script": {
+                        "type": "text/javascript",
+                        "exec": [
+                          "// ================================================================",
+                          "// ASSERTIONS ESPECÍFICAS - R03",
+                          "// ================================================================",
+                          "",
+                          "if (pm.response.code === 200) {",
+                          "    const json = pm.response.json();",
+                          "    const requestBody = JSON.parse(pm.request.body.raw || '{}');",
+                          "",
+                          "    pm.test('Expected rejection code is 3', function () {",
+                          "        const reasons = json['rejection-reasons'] || [];",
+                          "        pm.expect(String(reasons[0]?.code)).to.eql('3');",
+                          "    });",
+                          "",
+                          "    pm.test('Expected rejection description is correct', function () {",
+                          "        const reasons = json['rejection-reasons'] || [];",
+                          "        pm.expect(reasons[0]?.description).to.eql('Supera cantidad de cbu/cvu permitidos');",
+                          "    });",
+                          "",
+                          "    pm.test('CBU/CVU input remains inside rejection partition', function () {",
+                          "        const expectedTotalAccounts = Number(pm.variables.get('expectedTotalAccounts'));",
+                          "        pm.expect(requestBody.party['total-account']).to.eql(expectedTotalAccounts);",
+                          "        pm.expect(requestBody.party['total-account']).to.be.at.least(21);",
+                          "    });",
+                          "}"
+                        ]
+                      }
+                    }
+                  ],
+                  "request": {
+                    "auth": {
+                      "type": "bearer",
+                      "bearer": [
+                        {
+                          "key": "token",
+                          "value": "{{AccessToken}}",
+                          "type": "string"
+                        }
+                      ]
+                    },
+                    "method": "POST",
+                    "header": [
+                      {
+                        "key": "Accept",
+                        "value": "application/json",
+                        "type": "text"
+                      },
+                      {
+                        "key": "Content-Type",
+                        "value": "application/json",
+                        "type": "text"
+                      },
+                      {
+                        "key": "x-request-id",
+                        "value": "{{$randomUUID}}",
+                        "type": "text"
+                      },
+                      {
+                        "key": "x-customer-id",
+                        "value": "{{xCustomerId}}",
+                        "type": "text"
+                      },
+                      {
+                        "key": "Host",
+                        "value": "{{headerHost}}",
+                        "type": "text"
+                      }
+                    ],
+                    "body": {
+                      "mode": "raw",
+                      "raw": "{\n    \"request-channel\": 20,\n    \"request-sub-channel\": 9,\n    \"utm-tracking\": {\n        \"source\": \"web\",\n        \"medium\": \"landing\",\n        \"campaign\": \"youth\",\n        \"content\": \"placeholder\"\n    },\n    \"references\": null,\n    \"party\": {\n        \"taxpayer-number\": \"20062484838\",\n        \"birth-date\": \"2000-07-07\",\n        \"is-customer\": false,\n        \"is-digital-customer\": false,\n        \"bank-segment-code\": null,\n        \"segment-code\": null,\n        \"sub-segment-code\": null,\n        \"total-account\": 21,\n        \"process-type\": \"ENLINEA\",\n        \"product\": {\n            \"category\": null,\n            \"details\": []\n        }\n    }\n}",
+                      "options": {
+                        "raw": {
+                          "language": "json"
+                        }
+                      }
+                    },
+                    "url": {
+                      "raw": "{{baseURL}}/v1/fp/offer-rules/eligibility-evaluations",
+                      "host": [
+                        "{{baseURL}}"
+                      ],
+                      "path": [
+                        "v1",
+                        "fp",
+                        "offer-rules",
+                        "eligibility-evaluations"
+                      ]
+                    },
+                    "description": "Decision Model: R03 | Prioridad: P0 | Canal: PS\nES CLIENTE=NO | EDAD>=18 | CBU+CVU>=21 | PREFILTRO APRUEBA=NO | Motivo esperado: Supera cantidad de cbu/cvu permitidos (code 3)"
+                  },
+                  "response": []
+                },
+                {
+                  "name": "PS | CBU/CVU >=21 - Cliente adolescente",
+                  "event": [
+                    {
+                      "listen": "test",
+                      "script": {
+                        "type": "text/javascript",
+                        "exec": [
+                          "// ================================================================",
+                          "// ASSERTIONS ESPECÍFICAS - R03",
+                          "// ================================================================",
+                          "",
+                          "if (pm.response.code === 200) {",
+                          "    const json = pm.response.json();",
+                          "    const requestBody = JSON.parse(pm.request.body.raw || '{}');",
+                          "",
+                          "    pm.test('Expected rejection code is 3', function () {",
+                          "        const reasons = json['rejection-reasons'] || [];",
+                          "        pm.expect(String(reasons[0]?.code)).to.eql('3');",
+                          "    });",
+                          "",
+                          "    pm.test('Expected rejection description is correct', function () {",
+                          "        const reasons = json['rejection-reasons'] || [];",
+                          "        pm.expect(reasons[0]?.description).to.eql('Supera cantidad de cbu/cvu permitidos');",
+                          "    });",
+                          "",
+                          "    pm.test('CBU/CVU input remains inside rejection partition', function () {",
+                          "        const expectedTotalAccounts = Number(pm.variables.get('expectedTotalAccounts'));",
+                          "        pm.expect(requestBody.party['total-account']).to.eql(expectedTotalAccounts);",
+                          "        pm.expect(requestBody.party['total-account']).to.be.at.least(21);",
+                          "    });",
+                          "}"
+                        ]
+                      }
+                    }
+                  ],
+                  "request": {
+                    "auth": {
+                      "type": "bearer",
+                      "bearer": [
+                        {
+                          "key": "token",
+                          "value": "{{AccessToken}}",
+                          "type": "string"
+                        }
+                      ]
+                    },
+                    "method": "POST",
+                    "header": [
+                      {
+                        "key": "Accept",
+                        "value": "application/json",
+                        "type": "text"
+                      },
+                      {
+                        "key": "Content-Type",
+                        "value": "application/json",
+                        "type": "text"
+                      },
+                      {
+                        "key": "x-request-id",
+                        "value": "{{$randomUUID}}",
+                        "type": "text"
+                      },
+                      {
+                        "key": "x-customer-id",
+                        "value": "{{xCustomerId}}",
+                        "type": "text"
+                      },
+                      {
+                        "key": "Host",
+                        "value": "{{headerHost}}",
+                        "type": "text"
+                      }
+                    ],
+                    "body": {
+                      "mode": "raw",
+                      "raw": "{\n    \"request-channel\": 20,\n    \"request-sub-channel\": 9,\n    \"utm-tracking\": {\n        \"source\": \"web\",\n        \"medium\": \"landing\",\n        \"campaign\": \"youth\",\n        \"content\": \"placeholder\"\n    },\n    \"references\": null,\n    \"party\": {\n        \"taxpayer-number\": \"20113669714\",\n        \"birth-date\": \"2010-07-07\",\n        \"is-customer\": true,\n        \"is-digital-customer\": true,\n        \"bank-segment-code\": \"01\",\n        \"segment-code\": \"01\",\n        \"sub-segment-code\": \"02\",\n        \"total-account\": 21,\n        \"process-type\": \"ENLINEA\",\n        \"product\": {\n            \"category\": \"02\",\n            \"details\": [\n                {\n                    \"id\": \"3\",\n                    \"description\": \"CUENTA CORRIENTE\",\n                    \"currency-id\": 80,\n                    \"account\": {\n                        \"holder-type\": \"T\",\n                        \"category\": \"MED\"\n                    },\n                    \"status-code\": \"A\",\n                    \"product-bundle-id\": 0\n                },\n                {\n                    \"id\": \"4\",\n                    \"description\": \"CUENTA DE AHORROS\",\n                    \"currency-id\": 2,\n                    \"account\": {\n                        \"holder-type\": \"T\",\n                        \"category\": \"SA\"\n                    },\n                    \"status-code\": \"A\",\n                    \"product-bundle-id\": 0\n                },\n                {\n                    \"id\": \"4\",\n                    \"description\": \"CUENTA DE AHORROS\",\n                    \"currency-id\": 2,\n                    \"account\": {\n                        \"holder-type\": \"T\",\n                        \"category\": \"ALT\"\n                    },\n                    \"status-code\": \"I\",\n                    \"product-bundle-id\": 0\n                },\n                {\n                    \"id\": \"4\",\n                    \"description\": \"CUENTA DE AHORROS\",\n                    \"currency-id\": 80,\n                    \"account\": {\n                        \"holder-type\": \"T\",\n                        \"category\": \"KME\"\n                    },\n                    \"status-code\": \"A\",\n                    \"product-bundle-id\": 0\n                },\n                {\n                    \"id\": \"16\",\n                    \"description\": \"ATM - ADMINISTRACION TARJETAS DE DEBITO\",\n                    \"currency-id\": null,\n                    \"account\": {\n                        \"holder-type\": null,\n                        \"category\": null\n                    },\n                    \"status-code\": \"A\",\n                    \"product-bundle-id\": null\n                },\n                {\n                    \"id\": \"28\",\n                    \"description\": \"TARJETAS DE CREDITO\",\n                    \"currency-id\": null,\n                    \"account\": {\n                        \"holder-type\": null,\n                        \"category\": null\n                    },\n                    \"status-code\": \"A\",\n                    \"product-bundle-id\": null\n                }\n            ]\n        }\n    }\n}",
+                      "options": {
+                        "raw": {
+                          "language": "json"
+                        }
+                      }
+                    },
+                    "url": {
+                      "raw": "{{baseURL}}/v1/fp/offer-rules/eligibility-evaluations",
+                      "host": [
+                        "{{baseURL}}"
+                      ],
+                      "path": [
+                        "v1",
+                        "fp",
+                        "offer-rules",
+                        "eligibility-evaluations"
+                      ]
+                    },
+                    "description": "Decision Model: R03 | Prioridad: P0 | Canal: PS\nES CLIENTE=SI | EDAD 13-17 | CBU+CVU>=21 | PREFILTRO APRUEBA=NO | Motivo esperado: Supera cantidad de cbu/cvu permitidos (code 3)"
+                  },
+                  "response": []
+                },
+                {
+                  "name": "PS | CBU/CVU >=21 - Cliente adulto",
+                  "event": [
+                    {
+                      "listen": "test",
+                      "script": {
+                        "type": "text/javascript",
+                        "exec": [
+                          "// ================================================================",
+                          "// ASSERTIONS ESPECÍFICAS - R03",
+                          "// ================================================================",
+                          "",
+                          "if (pm.response.code === 200) {",
+                          "    const json = pm.response.json();",
+                          "    const requestBody = JSON.parse(pm.request.body.raw || '{}');",
+                          "",
+                          "    pm.test('Expected rejection code is 3', function () {",
+                          "        const reasons = json['rejection-reasons'] || [];",
+                          "        pm.expect(String(reasons[0]?.code)).to.eql('3');",
+                          "    });",
+                          "",
+                          "    pm.test('Expected rejection description is correct', function () {",
+                          "        const reasons = json['rejection-reasons'] || [];",
+                          "        pm.expect(reasons[0]?.description).to.eql('Supera cantidad de cbu/cvu permitidos');",
+                          "    });",
+                          "",
+                          "    pm.test('CBU/CVU input remains inside rejection partition', function () {",
+                          "        const expectedTotalAccounts = Number(pm.variables.get('expectedTotalAccounts'));",
+                          "        pm.expect(requestBody.party['total-account']).to.eql(expectedTotalAccounts);",
+                          "        pm.expect(requestBody.party['total-account']).to.be.at.least(21);",
+                          "    });",
+                          "}"
+                        ]
+                      }
+                    }
+                  ],
+                  "request": {
+                    "auth": {
+                      "type": "bearer",
+                      "bearer": [
+                        {
+                          "key": "token",
+                          "value": "{{AccessToken}}",
+                          "type": "string"
+                        }
+                      ]
+                    },
+                    "method": "POST",
+                    "header": [
+                      {
+                        "key": "Accept",
+                        "value": "application/json",
+                        "type": "text"
+                      },
+                      {
+                        "key": "Content-Type",
+                        "value": "application/json",
+                        "type": "text"
+                      },
+                      {
+                        "key": "x-request-id",
+                        "value": "{{$randomUUID}}",
+                        "type": "text"
+                      },
+                      {
+                        "key": "x-customer-id",
+                        "value": "{{xCustomerId}}",
+                        "type": "text"
+                      },
+                      {
+                        "key": "Host",
+                        "value": "{{headerHost}}",
+                        "type": "text"
+                      }
+                    ],
+                    "body": {
+                      "mode": "raw",
+                      "raw": "{\n    \"request-channel\": 20,\n    \"request-sub-channel\": 9,\n    \"utm-tracking\": {\n        \"source\": \"web\",\n        \"medium\": \"landing\",\n        \"campaign\": \"youth\",\n        \"content\": \"placeholder\"\n    },\n    \"references\": null,\n    \"party\": {\n        \"taxpayer-number\": \"20113669714\",\n        \"birth-date\": \"2000-07-07\",\n        \"is-customer\": true,\n        \"is-digital-customer\": true,\n        \"bank-segment-code\": \"01\",\n        \"segment-code\": \"01\",\n        \"sub-segment-code\": \"02\",\n        \"total-account\": 21,\n        \"process-type\": \"ENLINEA\",\n        \"product\": {\n            \"category\": \"02\",\n            \"details\": [\n                {\n                    \"id\": \"3\",\n                    \"description\": \"CUENTA CORRIENTE\",\n                    \"currency-id\": 80,\n                    \"account\": {\n                        \"holder-type\": \"T\",\n                        \"category\": \"MED\"\n                    },\n                    \"status-code\": \"A\",\n                    \"product-bundle-id\": 0\n                },\n                {\n                    \"id\": \"4\",\n                    \"description\": \"CUENTA DE AHORROS\",\n                    \"currency-id\": 2,\n                    \"account\": {\n                        \"holder-type\": \"T\",\n                        \"category\": \"SA\"\n                    },\n                    \"status-code\": \"A\",\n                    \"product-bundle-id\": 0\n                },\n                {\n                    \"id\": \"4\",\n                    \"description\": \"CUENTA DE AHORROS\",\n                    \"currency-id\": 2,\n                    \"account\": {\n                        \"holder-type\": \"T\",\n                        \"category\": \"ALT\"\n                    },\n                    \"status-code\": \"I\",\n                    \"product-bundle-id\": 0\n                },\n                {\n                    \"id\": \"4\",\n                    \"description\": \"CUENTA DE AHORROS\",\n                    \"currency-id\": 80,\n                    \"account\": {\n                        \"holder-type\": \"T\",\n                        \"category\": \"KME\"\n                    },\n                    \"status-code\": \"A\",\n                    \"product-bundle-id\": 0\n                },\n                {\n                    \"id\": \"16\",\n                    \"description\": \"ATM - ADMINISTRACION TARJETAS DE DEBITO\",\n                    \"currency-id\": null,\n                    \"account\": {\n                        \"holder-type\": null,\n                        \"category\": null\n                    },\n                    \"status-code\": \"A\",\n                    \"product-bundle-id\": null\n                },\n                {\n                    \"id\": \"28\",\n                    \"description\": \"TARJETAS DE CREDITO\",\n                    \"currency-id\": null,\n                    \"account\": {\n                        \"holder-type\": null,\n                        \"category\": null\n                    },\n                    \"status-code\": \"A\",\n                    \"product-bundle-id\": null\n                }\n            ]\n        }\n    }\n}",
+                      "options": {
+                        "raw": {
+                          "language": "json"
+                        }
+                      }
+                    },
+                    "url": {
+                      "raw": "{{baseURL}}/v1/fp/offer-rules/eligibility-evaluations",
+                      "host": [
+                        "{{baseURL}}"
+                      ],
+                      "path": [
+                        "v1",
+                        "fp",
+                        "offer-rules",
+                        "eligibility-evaluations"
+                      ]
+                    },
+                    "description": "Decision Model: R03 | Prioridad: P0 | Canal: PS\nES CLIENTE=SI | EDAD>=18 | CBU+CVU>=21 | PREFILTRO APRUEBA=NO | Motivo esperado: Supera cantidad de cbu/cvu permitidos (code 3)"
+                  },
+                  "response": []
+                }
+              ],
+              "event": [
+                {
+                  "listen": "prerequest",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "// 1. Genera edad aleatoria según la banda del caso (nombre del request)",
+                      "const name = pm.info.requestName || '';",
+                      "let minAge, maxAge;",
+                      "",
+                      "if (name.includes('<=12')) {",
+                      "    minAge = 2;  // Rango seguro (evita 0 o 1)",
+                      "    maxAge = 11; // Evita el límite exacto de 12",
+                      "} else if (name.toLowerCase().includes('adolescente')) {",
+                      "    minAge = 14; // Rango seguro para adolescentes (14 a 17)",
+                      "    maxAge = 17;",
+                      "} else if (name.toLowerCase().includes('adulto')) {",
+                      "    minAge = 20; // Rango seguro para adultos",
+                      "    maxAge = 60;",
+                      "}",
+                      "",
+                      "if (minAge !== undefined && pm.request.body && pm.request.body.raw) {",
+                      "    const expectedAge = Math.floor(Math.random() * (maxAge - minAge + 1)) + minAge;",
+                      "    ",
+                      "    // Año de nacimiento dinámico (fijado al 1 de enero para evitar desfasajes UTC)",
+                      "    const currentYear = new Date().getFullYear();",
+                      "    const birthYear = currentYear - expectedAge;",
+                      "    const birthDateStr = `${birthYear}-01-01`;",
+                      "",
+                      "    pm.variables.set('expectedAge', expectedAge);",
+                      "",
+                      "    const body = JSON.parse(pm.request.body.raw);",
+                      "    body.party['birth-date'] = birthDateStr;",
+                      "",
+                      "    // 2. Dinamizar cantidad de CBU / CVU en los casos que prueban la regla \"CBU/CVU >= 21\"",
+                      "    if (name.toUpperCase().includes('CBU/CVU')) {",
+                      "        // Genera un número aleatorio entre 21 y 99",
+                      "        const randomTotalAccounts = Math.floor(Math.random() * (99 - 21 + 1)) + 21;",
+                      "        body.party['total-account'] = randomTotalAccounts;",
+                      "        pm.variables.set('expectedTotalAccounts', randomTotalAccounts);",
+                      "        console.log(`[${name}] total-account aleatorio generado: ${randomTotalAccounts}`);",
+                      "    }",
+                      "",
+                      "    // Actualiza el body de la petición",
+                      "    pm.request.body.update(JSON.stringify(body, null, 4));",
+                      "",
+                      "    console.log(`[${name}] Edad aleatoria: ${expectedAge} | birth-date: ${birthDateStr}`);",
+                      "}"
+                    ]
+                  }
+                },
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "// ================================================================",
+                      "// ASSERTIONS COMUNES - P0 RECHAZOS PREFILTRO",
+                      "// Technical contract + common business invariants.",
+                      "// ================================================================",
+                      "",
+                      "pm.test('HTTP status is 200', function () {",
+                      "    pm.response.to.have.status(200);",
+                      "});",
+                      "",
+                      "pm.test('Response Content-Type is JSON', function () {",
+                      "    pm.expect(pm.response.headers.get('Content-Type') || '').to.include('application/json');",
+                      "});",
+                      "",
+                      "if (pm.response.code === 200) {",
+                      "    const json = pm.response.json();",
+                      "    const requestBody = JSON.parse(pm.request.body.raw || '{}');",
+                      "    const expectedAge = Number(pm.variables.get('expectedAge'));",
+                      "",
+                      "    pm.test('Response has the minimum expected contract', function () {",
+                      "        pm.expect(json).to.be.an('object');",
+                      "        pm.expect(json['commercial-offers']).to.be.an('array');",
+                      "        pm.expect(json['is-pre-screening']).to.be.a('boolean');",
+                      "        pm.expect(json.party).to.be.an('object');",
+                      "        pm.expect(json['rejection-reasons']).to.be.an('array');",
+                      "        pm.expect(json['status-code']).to.be.a('string');",
+                      "        pm.expect(json['transaction-context']).to.be.an('object');",
+                      "    });",
+                      "",
+                      "    pm.test('Prefiltro rejects and does not generate offers', function () {",
+                      "        pm.expect(json['status-code']).to.eql('REJECTED');",
+                      "        pm.expect(json['commercial-offers']).to.be.empty;",
+                      "        pm.expect(json['is-pre-screening']).to.be.false;",
+                      "        pm.expect(json.party['offer-segment']).to.be.null;",
+                      "    });",
+                      "",
+                      "    pm.test('Prefilter rejection description is consistent', function () {",
+                      "        pm.expect(json['pre-screening-description']).to.eql('Se genero uno o más rechazos.');",
+                      "    });",
+                      "",
+                      "    pm.test('Exactly one rejection reason is returned for this isolated rule scenario', function () {",
+                      "        pm.expect(json['rejection-reasons']).to.have.lengthOf(1);",
+                      "    });",
+                      "",
+                      "    pm.test('Party identity and customer flag correspond to the request', function () {",
+                      "        pm.expect(json.party['taxpayer-number']).to.eql(requestBody.party['taxpayer-number']);",
+                      "        pm.expect(json.party['is-customer']).to.eql(requestBody.party['is-customer']);",
+                      "    });",
+                      "",
+                      "    pm.test('Returned age matches generated test data and expected partition', function () {",
+                      "        pm.expect(json.party.age).to.eql(expectedAge);",
+                      "        const name = (pm.info.requestName || '').toLowerCase();",
+                      "        if (name.includes('<=12')) {",
+                      "            pm.expect(json.party.age).to.be.at.most(12);",
+                      "        } else if (name.includes('adolescente')) {",
+                      "            pm.expect(json.party.age).to.be.within(13, 17);",
+                      "        } else if (name.includes('adulto')) {",
+                      "            pm.expect(json.party.age).to.be.at.least(18);",
+                      "        }",
+                      "    });",
+                      "",
+                      "    pm.test('Request belongs to expected ONB channel/subchannel model', function () {",
+                      "        pm.expect(requestBody['request-channel']).to.eql(20);",
+                      "        const name = pm.info.requestName || '';",
+                      "        if (name.startsWith('MA |')) {",
+                      "            pm.expect(requestBody['request-sub-channel']).to.eql(8);",
+                      "        } else if (name.startsWith('PS |')) {",
+                      "            pm.expect(requestBody['request-sub-channel']).to.eql(9);",
+                      "        }",
+                      "    });",
+                      "",
+                      "    pm.test('Transaction context is successful', function () {",
+                      "        pm.expect(json['transaction-context'].code).to.eql('10002');",
+                      "        pm.expect(json['transaction-context']['code-description']).to.eql('Operación exitosa.');",
+                      "        pm.expect(json['transaction-context']['time-stamp']).to.be.a('string').and.not.empty;",
+                      "    });",
+                      "}"
+                    ]
+                  }
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "event": [
+    {
+      "listen": "prerequest",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          "// Si no hay token y no es el request de oauth, se puede setear manualmente AccessToken",
+          "if (!pm.collectionVariables.get('AccessToken')) {",
+          "    console.warn('AccessToken vacío. Ejecutá primero 00 - oauth-access.');",
+          "}"
+        ]
+      }
+    },
+    {
+      "listen": "test",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          ""
+        ]
+      }
+    }
+  ],
+  "variable": [
+    {
+      "key": "baseURL",
+      "value": "https://api-test.gcp.macro.com.ar"
+    },
+    {
+      "key": "headerHost",
+      "value": "api-test.macro.com.ar"
+    },
+    {
+      "key": "Username",
+      "value": "GVxvrA6ctS7rWHpXnZe9AnTzXOWrCWAuGUKh5JvcO3SLy4sL"
+    },
+    {
+      "key": "Password",
+      "value": "Jrd16seZ4wzWAO6DFJP9ZPD1taUwXra4wwGvkkDAOYedYG3JZeoIDOwE70t2Yv2t"
+    },
+    {
+      "key": "AccessToken",
+      "value": ""
+    },
+    {
+      "key": "xCustomerId",
+      "value": "2994076"
+    }
+  ]
+}
